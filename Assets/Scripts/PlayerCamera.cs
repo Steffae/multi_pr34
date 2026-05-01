@@ -12,7 +12,6 @@ public class PlayerCamera : NetworkBehaviour
     public override void OnStartNetwork()
     {
         base.OnStartNetwork();
-        // Никаких проверок здесь, всё делаем в Update
     }
 
     private void Update()
