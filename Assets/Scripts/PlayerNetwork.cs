@@ -35,7 +35,6 @@ public class PlayerNetwork : NetworkBehaviour
         }
     }
 
-    // ... остальные методы без изменений ...
     public override void OnStopNetwork()
     {
         base.OnStopNetwork();
