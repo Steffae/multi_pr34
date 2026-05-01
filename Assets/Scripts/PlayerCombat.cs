@@ -18,8 +18,6 @@ public class PlayerCombat : NetworkBehaviour
     {
         base.OnStartNetwork();
 
-        if (OwnerId == base.LocalConnection.ClientId) return;
-
         if (_inputHandler != null)
         {
             _inputHandler.OnAttackInput += OnAttackInput;
@@ -30,8 +28,6 @@ public class PlayerCombat : NetworkBehaviour
     {
         base.OnStopNetwork();
 
-        if (OwnerId != base.LocalConnection.ClientId) return;
-
         if (_inputHandler != null)
         {
             _inputHandler.OnAttackInput -= OnAttackInput;
@@ -40,7 +36,8 @@ public class PlayerCombat : NetworkBehaviour
 
     private void OnAttackInput()
     {
-        if (OwnerId != base.LocalConnection.ClientId) return;
+        // Проверяем владельца
+        if (OwnerId != LocalConnection.ClientId) return;
         TryFindAndAttack();
     }
 
@@ -69,14 +66,13 @@ public class PlayerCombat : NetworkBehaviour
 
     public void TryAttack(PlayerNetwork target)
     {
-        if (OwnerId != base.LocalConnection.ClientId || target == null) return;
+        if (OwnerId != LocalConnection.ClientId || target == null) return;
         DealDamageServerRpc(target.NetworkObject.ObjectId, _damage);
     }
 
     [ServerRpc]
     private void DealDamageServerRpc(int targetObjectId, int damage)
     {
-        // Ищем объект по NetworkObjectId
         NetworkObject targetObject = null;
         foreach (NetworkObject nob in FishNet.InstanceFinder.ServerManager.Objects.Spawned.Values)
         {
@@ -100,7 +96,5 @@ public class PlayerCombat : NetworkBehaviour
 
         int nextHp = Mathf.Max(0, targetPlayer.HP.Value - damage);
         targetPlayer.HP.Value = nextHp;
-
-        Debug.Log($"[Server] {_playerNetwork.Nickname.Value} attacked {targetPlayer.Nickname.Value} for {damage} damage. HP: {nextHp}");
     }
 }

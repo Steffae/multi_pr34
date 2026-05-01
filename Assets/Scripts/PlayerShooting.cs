@@ -20,30 +20,28 @@ public class PlayerShooting : NetworkBehaviour
     {
         _inputHandler = GetComponent<PlayerInputHandler>();
         _playerNetwork = GetComponent<PlayerNetwork>();
+        Debug.Log($"[PlayerShooting] Awake - InputHandler: {_inputHandler != null}");
     }
 
     public override void OnStartNetwork()
     {
         base.OnStartNetwork();
 
-        if (base.IsServerInitialized)
+        if (IsServerInitialized)
         {
             CurrentAmmo.Value = _maxAmmo;
         }
 
-        if (OwnerId != base.LocalConnection.ClientId) return;
-
         if (_inputHandler != null)
         {
             _inputHandler.OnShootInput += OnShootInput;
+            Debug.Log("[PlayerShooting] Subscribed to shoot input");
         }
     }
 
     public override void OnStopNetwork()
     {
         base.OnStopNetwork();
-
-        if (OwnerId != base.LocalConnection.ClientId) return;
 
         if (_inputHandler != null)
         {
@@ -53,32 +51,44 @@ public class PlayerShooting : NetworkBehaviour
 
     private void OnShootInput()
     {
-        if (OwnerId != base.LocalConnection.ClientId) return;
-        if (_firePoint == null) return;
+        Debug.Log($"[PlayerShooting] OnShootInput called. OwnerId: {OwnerId}, LocalClientId: {LocalConnection.ClientId}");
 
-        if (_playerNetwork != null && !_playerNetwork.IsAlive.Value) return;
+        // Временно убираем проверку владельца для отладки
+        // if (OwnerId != LocalConnection.ClientId) return;
 
+        if (_firePoint == null)
+        {
+            Debug.LogError("[PlayerShooting] FirePoint is null!");
+            return;
+        }
+
+        if (_playerNetwork != null && !_playerNetwork.IsAlive.Value)
+        {
+            Debug.Log("[PlayerShooting] Player is dead, can't shoot");
+            return;
+        }
+
+        Debug.Log("[PlayerShooting] Calling ShootServerRpc");
         ShootServerRpc(_firePoint.position, _firePoint.forward);
     }
 
     [ServerRpc]
     private void ShootServerRpc(Vector3 position, Vector3 direction)
     {
-        // 1. Жив ли игрок?
+        Debug.Log($"[Server] ShootServerRpc called. HP: {_playerNetwork?.HP.Value}, Ammo: {CurrentAmmo.Value}");
+
         if (_playerNetwork != null && _playerNetwork.HP.Value <= 0)
         {
             Debug.Log("[Server] Shoot failed: player is dead");
             return;
         }
 
-        // 2. Есть ли патроны?
         if (CurrentAmmo.Value <= 0)
         {
             Debug.Log("[Server] Shoot failed: no ammo");
             return;
         }
 
-        // 3. Прошёл ли кулдаун?
         if (Time.time < _lastShotTime + _cooldown)
         {
             Debug.Log("[Server] Shoot failed: cooldown");
@@ -90,13 +100,13 @@ public class PlayerShooting : NetworkBehaviour
 
         Debug.Log($"[Server] Shooting! Ammo left: {CurrentAmmo.Value}");
 
-        // Спавним снаряд
         GameObject projectileObj = Instantiate(_projectilePrefab, position + direction * 1.2f, Quaternion.LookRotation(direction));
         NetworkObject networkObject = projectileObj.GetComponent<NetworkObject>();
 
         if (networkObject != null)
         {
             base.Spawn(networkObject, base.Owner);
+            Debug.Log("[Server] Projectile spawned");
         }
         else
         {

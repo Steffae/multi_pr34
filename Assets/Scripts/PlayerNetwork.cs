@@ -12,7 +12,7 @@ public class PlayerNetwork : NetworkBehaviour
     public readonly SyncVar<int> HP = new SyncVar<int>(100);
     public readonly SyncVar<bool> IsAlive = new SyncVar<bool>(true);
 
-    private bool _nicknameSent = false;
+    private bool _initialized = false;
 
     public override void OnStartNetwork()
     {
@@ -23,15 +23,20 @@ public class PlayerNetwork : NetworkBehaviour
         IsAlive.OnChange += OnIsAliveChanged;
 
         SetPlayerColor(true);
+        _initialized = true;
     }
 
     private void Update()
     {
-        // Отправляем ник в первом же кадре после спавна
-        if (!_nicknameSent && IsSpawned)
+        // Отправляем ник когда клиент активен
+        if (_initialized && IsSpawned && !string.IsNullOrEmpty(ConnectionUI.PlayerNickname))
         {
-            _nicknameSent = true;
-            SetNicknameServerRpc(ConnectionUI.PlayerNickname);
+            // Проверяем что клиент активен перед вызовом RPC
+            if (IsClientInitialized)
+            {
+                _initialized = false; // Отправляем только один раз
+                SetNicknameServerRpc(ConnectionUI.PlayerNickname);
+            }
         }
     }
 
@@ -52,14 +57,12 @@ public class PlayerNetwork : NetworkBehaviour
             : nickname.Trim();
     }
 
-    private void OnNicknameChanged(string oldValue, string newValue, bool asServer)
-    {
-    }
+    // ... остальные методы без изменений ...
+    private void OnNicknameChanged(string oldValue, string newValue, bool asServer) { }
 
     private void OnHpChanged(int oldValue, int newValue, bool asServer)
     {
         if (!IsServerInitialized) return;
-
         if (newValue <= 0 && IsAlive.Value)
         {
             IsAlive.Value = false;
@@ -69,17 +72,12 @@ public class PlayerNetwork : NetworkBehaviour
 
     private IEnumerator RespawnRoutine()
     {
-        Debug.Log($"[Server] Player {Nickname.Value} died. Respawning...");
-
         yield return new WaitForSeconds(2f);
         HideModelObserversRpc(true);
-
         yield return new WaitForSeconds(3f);
         TeleportToRandomSpawnPoint();
-
         yield return new WaitForSeconds(2f);
         HideModelObserversRpc(false);
-
         HP.Value = 100;
         IsAlive.Value = true;
     }
@@ -88,35 +86,24 @@ public class PlayerNetwork : NetworkBehaviour
     private void HideModelObserversRpc(bool hide)
     {
         Renderer renderer = GetComponent<Renderer>();
-        if (renderer != null)
-            renderer.enabled = !hide;
-        if (canvas != null)
-            canvas.SetActive(!hide);
+        if (renderer != null) renderer.enabled = !hide;
+        if (canvas != null) canvas.SetActive(!hide);
     }
 
     private void OnIsAliveChanged(bool oldValue, bool newValue, bool asServer)
     {
         SetPlayerColor(newValue);
         Collider col = GetComponent<Collider>();
-        if (col != null)
-            col.enabled = newValue;
+        if (col != null) col.enabled = newValue;
     }
 
     private void SetPlayerColor(bool isAlive)
     {
         Renderer renderer = GetComponent<Renderer>();
         if (renderer == null) return;
-
-        if (!isAlive)
-        {
-            renderer.material.color = Color.black;
-            return;
-        }
-
-        if (OwnerId == 0)
-            renderer.material.color = Color.pink;
-        else if (pinkMat != null)
-            renderer.material = pinkMat;
+        if (!isAlive) { renderer.material.color = Color.black; return; }
+        if (OwnerId == 0) renderer.material.color = Color.pink;
+        else if (pinkMat != null) renderer.material = pinkMat;
     }
 
     private void TeleportToRandomSpawnPoint()
