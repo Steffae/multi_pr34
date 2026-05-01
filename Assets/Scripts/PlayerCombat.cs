@@ -36,8 +36,7 @@ public class PlayerCombat : NetworkBehaviour
 
     private void OnAttackInput()
     {
-        // Проверяем владельца
-        if (OwnerId != LocalConnection.ClientId) return;
+        if (!IsOwner) return;
         TryFindAndAttack();
     }
 
@@ -70,7 +69,7 @@ public class PlayerCombat : NetworkBehaviour
         DealDamageServerRpc(target.NetworkObject.ObjectId, _damage);
     }
 
-    [ServerRpc]
+    [ServerRpc(RequireOwnership = false)]
     private void DealDamageServerRpc(int targetObjectId, int damage)
     {
         NetworkObject targetObject = null;

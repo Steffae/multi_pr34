@@ -7,9 +7,15 @@ using System.Collections;
 public class PlayerSpawner : MonoBehaviour
 {
     [SerializeField] private NetworkObject _playerPrefab;
+    private FishNet.Connection.NetworkConnection _hostConnection;
 
     private void Start()
     {
+        if (InstanceFinder.ServerManager != null)
+        {
+            InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+        }
+
         if (InstanceFinder.ClientManager != null)
         {
             InstanceFinder.ClientManager.OnClientConnectionState += OnClientConnectionState;
@@ -18,6 +24,11 @@ public class PlayerSpawner : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (InstanceFinder.ServerManager != null)
+        {
+            InstanceFinder.ServerManager.OnRemoteConnectionState -= OnRemoteConnectionState;
+        }
+
         if (InstanceFinder.ClientManager != null)
         {
             InstanceFinder.ClientManager.OnClientConnectionState -= OnClientConnectionState;
@@ -28,60 +39,50 @@ public class PlayerSpawner : MonoBehaviour
     {
         if (args.ConnectionState == LocalConnectionState.Started)
         {
-            StartCoroutine(SpawnPlayerWithDelay());
+            _hostConnection = InstanceFinder.ClientManager.Connection;
+            StartCoroutine(SpawnPlayerDelayed(_hostConnection));
         }
     }
 
-    private IEnumerator SpawnPlayerWithDelay()
+    private void OnRemoteConnectionState(FishNet.Connection.NetworkConnection connection, RemoteConnectionStateArgs args)
     {
-        // Ждем 2 секунды чтобы всё точно загрузилось
-        yield return new WaitForSeconds(2f);
-
-        if (_playerPrefab == null)
+        if (args.ConnectionState == RemoteConnectionState.Started)
         {
-            Debug.LogError("[PlayerSpawner] Player prefab is not assigned!");
-            yield break;
+            // Спавним только если это не хост-соединение
+            if (_hostConnection == null || connection.ClientId != _hostConnection.ClientId)
+            {
+                StartCoroutine(SpawnPlayerDelayed(connection));
+            }
         }
+    }
 
-        if (!InstanceFinder.ServerManager.Started)
-        {
-            Debug.LogError("[PlayerSpawner] Server is not started!");
-            yield break;
-        }
+    private IEnumerator SpawnPlayerDelayed(FishNet.Connection.NetworkConnection connection)
+    {
+        yield return new WaitForSeconds(1f);
+        SpawnPlayer(connection);
+    }
+
+    private void SpawnPlayer(FishNet.Connection.NetworkConnection ownerConnection)
+    {
+        if (_playerPrefab == null) return;
+        if (!InstanceFinder.ServerManager.Started) return;
+        if (ownerConnection == null || !ownerConnection.IsValid) return;
 
         Vector3 spawnPosition = GetRandomSpawnPosition();
         NetworkObject playerObject = Instantiate(_playerPrefab, spawnPosition, Quaternion.identity);
 
-        var clients = InstanceFinder.ServerManager.Clients;
-
-        if (clients.Count > 0)
-        {
-            foreach (var kvp in clients)
-            {
-                var connection = kvp.Value;
-                if (connection.IsValid)
-                {
-                    InstanceFinder.ServerManager.Spawn(playerObject.gameObject, connection);
-                    Debug.Log($"[PlayerSpawner] Spawned player with OwnerId: {playerObject.OwnerId}");
-                    yield break;
-                }
-            }
-        }
-
-        Debug.LogWarning("[PlayerSpawner] No valid clients, spawning without owner");
-        InstanceFinder.ServerManager.Spawn(playerObject.gameObject);
+        InstanceFinder.ServerManager.Spawn(playerObject.gameObject, ownerConnection);
+        Debug.Log($"[PlayerSpawner] Spawned player for ClientId: {ownerConnection.ClientId}, OwnerId: {playerObject.OwnerId}");
     }
 
     private Vector3 GetRandomSpawnPosition()
     {
         GameObject[] spawnPoints = GameObject.FindGameObjectsWithTag("SpawnPoint");
-
         if (spawnPoints.Length > 0)
         {
             int randomIndex = Random.Range(0, spawnPoints.Length);
             return spawnPoints[randomIndex].transform.position;
         }
-
         return new Vector3(0f, 1.5f, 0f);
     }
 }

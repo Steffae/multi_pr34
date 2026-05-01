@@ -12,7 +12,7 @@ public class PlayerNetwork : NetworkBehaviour
     public readonly SyncVar<int> HP = new SyncVar<int>(100);
     public readonly SyncVar<bool> IsAlive = new SyncVar<bool>(true);
 
-    private bool _initialized = false;
+    private bool _nicknameSent = false;
 
     public override void OnStartNetwork()
     {
@@ -23,27 +23,22 @@ public class PlayerNetwork : NetworkBehaviour
         IsAlive.OnChange += OnIsAliveChanged;
 
         SetPlayerColor(true);
-        _initialized = true;
     }
 
     private void Update()
     {
-        // Отправляем ник когда клиент активен
-        if (_initialized && IsSpawned && !string.IsNullOrEmpty(ConnectionUI.PlayerNickname))
+        // Отправляем ник ТОЛЬКО если это наш локальный игрок
+        if (!_nicknameSent && IsOwner && IsClientInitialized)
         {
-            // Проверяем что клиент активен перед вызовом RPC
-            if (IsClientInitialized)
-            {
-                _initialized = false; // Отправляем только один раз
-                SetNicknameServerRpc(ConnectionUI.PlayerNickname);
-            }
+            _nicknameSent = true;
+            SetNicknameServerRpc(ConnectionUI.PlayerNickname);
         }
     }
 
+    // ... остальные методы без изменений ...
     public override void OnStopNetwork()
     {
         base.OnStopNetwork();
-
         Nickname.OnChange -= OnNicknameChanged;
         HP.OnChange -= OnHpChanged;
         IsAlive.OnChange -= OnIsAliveChanged;
@@ -57,7 +52,6 @@ public class PlayerNetwork : NetworkBehaviour
             : nickname.Trim();
     }
 
-    // ... остальные методы без изменений ...
     private void OnNicknameChanged(string oldValue, string newValue, bool asServer) { }
 
     private void OnHpChanged(int oldValue, int newValue, bool asServer)
