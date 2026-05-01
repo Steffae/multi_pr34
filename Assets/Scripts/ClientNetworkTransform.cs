@@ -1,4 +1,4 @@
-using Unity.Netcode.Components;
+/*using Unity.Netcode.Components;
 using UnityEngine;
 
 public class ClientNetworkTransform : NetworkTransform
@@ -7,4 +7,4 @@ public class ClientNetworkTransform : NetworkTransform
     {
         return false; // позволяет клиенту двигаться
     }
-}
+}*/

@@ -1,4 +1,5 @@
-using Unity.Netcode;
+using FishNet.Object;
+using FishNet.Object.Synchronizing;
 using UnityEngine;
 
 public class PlayerShooting : NetworkBehaviour
@@ -13,11 +14,7 @@ public class PlayerShooting : NetworkBehaviour
     private PlayerNetwork _playerNetwork;
     private float _lastShotTime;
 
-    public NetworkVariable<int> CurrentAmmo = new(
-        10,
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server
-    );
+    public readonly SyncVar<int> CurrentAmmo = new SyncVar<int>(10);
 
     private void Awake()
     {
@@ -25,14 +22,16 @@ public class PlayerShooting : NetworkBehaviour
         _playerNetwork = GetComponent<PlayerNetwork>();
     }
 
-    public override void OnNetworkSpawn()
+    public override void OnStartNetwork()
     {
-        if (IsServer)
+        base.OnStartNetwork();
+
+        if (base.IsServerInitialized)
         {
             CurrentAmmo.Value = _maxAmmo;
         }
 
-        if (!IsOwner) return;
+        if (OwnerId != base.LocalConnection.ClientId) return;
 
         if (_inputHandler != null)
         {
@@ -40,9 +39,11 @@ public class PlayerShooting : NetworkBehaviour
         }
     }
 
-    public override void OnNetworkDespawn()
+    public override void OnStopNetwork()
     {
-        if (!IsOwner) return;
+        base.OnStopNetwork();
+
+        if (OwnerId != base.LocalConnection.ClientId) return;
 
         if (_inputHandler != null)
         {
@@ -52,17 +53,16 @@ public class PlayerShooting : NetworkBehaviour
 
     private void OnShootInput()
     {
-        if (!IsOwner) return;
+        if (OwnerId != base.LocalConnection.ClientId) return;
         if (_firePoint == null) return;
 
-        // Локальная проверка для быстрого отклика
         if (_playerNetwork != null && !_playerNetwork.IsAlive.Value) return;
 
         ShootServerRpc(_firePoint.position, _firePoint.forward);
     }
 
     [ServerRpc]
-    private void ShootServerRpc(Vector3 position, Vector3 direction, ServerRpcParams rpcParams = default)
+    private void ShootServerRpc(Vector3 position, Vector3 direction)
     {
         // 1. Жив ли игрок?
         if (_playerNetwork != null && _playerNetwork.HP.Value <= 0)
@@ -96,26 +96,12 @@ public class PlayerShooting : NetworkBehaviour
 
         if (networkObject != null)
         {
-            networkObject.SpawnWithOwnership(rpcParams.Receive.SenderClientId);
+            base.Spawn(networkObject, base.Owner);
         }
         else
         {
             Debug.LogError("[Server] Projectile prefab has no NetworkObject component!");
             Destroy(projectileObj);
         }
-    }
-
-    // Метод для восстановления патронов
-    public void AddAmmo(int amount)
-    {
-        if (!IsServer) return;
-        CurrentAmmo.Value = Mathf.Min(_maxAmmo, CurrentAmmo.Value + amount);
-    }
-
-    // Метод для полного восстановления патронов при респавне
-    public void RefillAmmo()
-    {
-        if (!IsServer) return;
-        CurrentAmmo.Value = _maxAmmo;
     }
 }

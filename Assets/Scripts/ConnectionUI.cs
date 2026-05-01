@@ -1,5 +1,6 @@
+using FishNet;
+using FishNet.Transporting;
 using TMPro;
-using Unity.Netcode;
 using UnityEngine;
 
 public class ConnectionUI : MonoBehaviour
@@ -7,56 +8,61 @@ public class ConnectionUI : MonoBehaviour
     [SerializeField] private TMP_InputField _nicknameInput;
     [SerializeField] private GameObject _menuPanel;
 
-    // Сохраняем ник локально до появления сетевого объекта игрока.
     public static string PlayerNickname { get; private set; } = "Player";
 
     private void Start()
     {
-        // Подписываемся на событие изменения состояния сети
-        NetworkManager.Singleton.OnClientStarted += HideMenu;
-        NetworkManager.Singleton.OnServerStarted += HideMenu;
+        if (InstanceFinder.ClientManager != null)
+        {
+            InstanceFinder.ClientManager.OnClientConnectionState += OnClientConnectionState;
+        }
     }
 
     private void OnDestroy()
     {
-        // Отписываемся при уничтожении
-        if (NetworkManager.Singleton != null)
+        if (InstanceFinder.ClientManager != null)
         {
-            NetworkManager.Singleton.OnClientStarted -= HideMenu;
-            NetworkManager.Singleton.OnServerStarted -= HideMenu;
+            InstanceFinder.ClientManager.OnClientConnectionState -= OnClientConnectionState;
+        }
+    }
+
+    private void OnClientConnectionState(ClientConnectionStateArgs args)
+    {
+        if (args.ConnectionState == LocalConnectionState.Started)
+        {
+            // Скрываем меню после подключения
+            HideMenu();
         }
     }
 
     public void StartAsHost()
     {
         SaveNickname();
-        // Хост одновременно является сервером и клиентом.
-        NetworkManager.Singleton.StartHost();
+        // Запускаем сервер и клиент
+        InstanceFinder.ServerManager.StartConnection();
+        InstanceFinder.ClientManager.StartConnection();
     }
 
     public void StartAsClient()
     {
         SaveNickname();
-        // Клиент только подключается к уже запущенному хосту/серверу.
-        NetworkManager.Singleton.StartClient();
+        // Подключаемся к серверу
+        InstanceFinder.ClientManager.StartConnection();
     }
 
     private void SaveNickname()
     {
-        // Нормализуем ввод, чтобы сервер не получил пустую строку.
         string rawValue = _nicknameInput != null ? _nicknameInput.text : string.Empty;
         PlayerNickname = string.IsNullOrWhiteSpace(rawValue) ? "Player" : rawValue.Trim();
+        Debug.Log($"[ConnectionUI] Saved nickname: {PlayerNickname}");
     }
 
     private void HideMenu()
     {
-        // Скрываем панель меню после успешного подключения
+        Debug.Log("[ConnectionUI] Connection started - hiding menu");
         if (_menuPanel != null)
         {
             _menuPanel.SetActive(false);
         }
-
-        // Также можно скрыть весь Canvas
-        gameObject.SetActive(false);
     }
 }

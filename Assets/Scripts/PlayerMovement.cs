@@ -1,4 +1,4 @@
-using Unity.Netcode;
+using FishNet.Object;
 using UnityEngine;
 
 [RequireComponent(typeof(CharacterController))]
@@ -18,9 +18,9 @@ public class PlayerMovement : NetworkBehaviour
         _inputHandler = GetComponent<PlayerInputHandler>();
     }
 
-    public override void OnNetworkSpawn()
+    public override void OnStartNetwork()
     {
-        if (!IsOwner) return;
+        base.OnStartNetwork();
 
         if (_inputHandler != null)
         {
@@ -28,9 +28,9 @@ public class PlayerMovement : NetworkBehaviour
         }
     }
 
-    public override void OnNetworkDespawn()
+    public override void OnStopNetwork()
     {
-        if (!IsOwner) return;
+        base.OnStopNetwork();
 
         if (_inputHandler != null)
         {
@@ -45,10 +45,12 @@ public class PlayerMovement : NetworkBehaviour
 
     private void Update()
     {
-        // Двигается только владелец И только если жив
+        // Если OwnerId = -1, объект еще не инициализирован
+        if (OwnerId < 0) return;
+
+        // Проверяем через IsOwner
         if (!IsOwner) return;
 
-        // Проверяем, жив ли игрок
         PlayerNetwork playerNetwork = GetComponent<PlayerNetwork>();
         if (playerNetwork != null && !playerNetwork.IsAlive.Value) return;
 

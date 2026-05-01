@@ -1,6 +1,7 @@
-using Unity.Netcode;
-using UnityEngine;
+using FishNet;
+using FishNet.Object;
 using System.Collections;
+using UnityEngine;
 
 public class PickupManager : MonoBehaviour
 {
@@ -11,27 +12,33 @@ public class PickupManager : MonoBehaviour
     private void Start()
     {
         // Подписываемся на событие запуска сервера
-        NetworkManager.Singleton.OnServerStarted += OnServerStarted;
-
-        // Если сервер уже запущен (например, при перезагрузке сцены)
-        if (NetworkManager.Singleton.IsServer)
+        if (InstanceFinder.ServerManager != null)
         {
-            OnServerStarted();
+            InstanceFinder.ServerManager.OnServerConnectionState += OnServerConnectionState;
+        }
+
+        // Если сервер уже запущен (проверяем через ServerManager)
+        if (InstanceFinder.ServerManager != null && InstanceFinder.ServerManager.Started)
+        {
+            SpawnAll();
         }
     }
 
     private void OnDestroy()
     {
-        if (NetworkManager.Singleton != null)
+        if (InstanceFinder.ServerManager != null)
         {
-            NetworkManager.Singleton.OnServerStarted -= OnServerStarted;
+            InstanceFinder.ServerManager.OnServerConnectionState -= OnServerConnectionState;
         }
     }
 
-    private void OnServerStarted()
+    private void OnServerConnectionState(FishNet.Transporting.ServerConnectionStateArgs args)
     {
-        Debug.Log("[PickupManager] Server started - spawning pickups");
-        SpawnAll();
+        if (args.ConnectionState == FishNet.Transporting.LocalConnectionState.Started)
+        {
+            Debug.Log("[PickupManager] Server started - spawning pickups");
+            SpawnAll();
+        }
     }
 
     private void SpawnAll()
@@ -81,7 +88,8 @@ public class PickupManager : MonoBehaviour
         NetworkObject networkObject = go.GetComponent<NetworkObject>();
         if (networkObject != null)
         {
-            networkObject.Spawn();
+            // Спавним объект в сети
+            InstanceFinder.ServerManager.Spawn(networkObject);
             Debug.Log($"[PickupManager] Spawned health pickup at {position}");
         }
         else

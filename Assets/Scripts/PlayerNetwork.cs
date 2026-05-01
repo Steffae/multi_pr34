@@ -1,147 +1,66 @@
-using System.Collections;
-using System.Collections.Generic;
-using Unity.Collections;
-using Unity.Netcode;
-using Unity.Netcode.Components;
+using FishNet.Object;
+using FishNet.Object.Synchronizing;
 using UnityEngine;
+using System.Collections;
 
 public class PlayerNetwork : NetworkBehaviour
 {
     [SerializeField] private Material pinkMat;
     [SerializeField] private GameObject canvas;
 
-    public NetworkVariable<FixedString32Bytes> Nickname = new(
-        default,
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server
-    );
+    public readonly SyncVar<string> Nickname = new SyncVar<string>("Player");
+    public readonly SyncVar<int> HP = new SyncVar<int>(100);
+    public readonly SyncVar<bool> IsAlive = new SyncVar<bool>(true);
 
-    public NetworkVariable<int> HP = new(
-        100,
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server
-    );
+    private bool _nicknameSent = false;
 
-    public NetworkVariable<bool> IsAlive = new(
-        true,
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server
-    );
-
-    private static List<Transform> _spawnPoints = new List<Transform>();
-    private NetworkTransform _networkTransform;
-
-    private void Awake()
+    public override void OnStartNetwork()
     {
-        _networkTransform = GetComponent<NetworkTransform>();
-    }
+        base.OnStartNetwork();
 
-    public override void OnNetworkSpawn()
-    {
-        // Собираем точки спавна один раз
-        if (_spawnPoints.Count == 0)
-        {
-            GameObject[] spawnObjects = GameObject.FindGameObjectsWithTag("SpawnPoint");
-            foreach (GameObject obj in spawnObjects)
-            {
-                _spawnPoints.Add(obj.transform);
-            }
-
-            if (_spawnPoints.Count == 0)
-            {
-                Debug.LogWarning("[PlayerNetwork] No spawn points found with tag 'SpawnPoint'.");
-            }
-        }
-
-        // Телепортируем только на сервере
-        if (IsServer)
-        {
-            StartCoroutine(DelayedInitialTeleport());
-        }
+        Nickname.OnChange += OnNicknameChanged;
+        HP.OnChange += OnHpChanged;
+        IsAlive.OnChange += OnIsAliveChanged;
 
         SetPlayerColor(true);
+    }
 
-        HP.OnValueChanged += OnHpChanged;
-        IsAlive.OnValueChanged += OnIsAliveChanged;
-
-        if (IsOwner)
+    private void Update()
+    {
+        // Отправляем ник в первом же кадре после спавна
+        if (!_nicknameSent && IsSpawned)
         {
-            SubmitNicknameServerRpc(ConnectionUI.PlayerNickname);
+            _nicknameSent = true;
+            SetNicknameServerRpc(ConnectionUI.PlayerNickname);
         }
     }
 
-    private IEnumerator DelayedInitialTeleport()
+    public override void OnStopNetwork()
     {
-        yield return null;
-        TeleportToRandomSpawnPoint();
+        base.OnStopNetwork();
+
+        Nickname.OnChange -= OnNicknameChanged;
+        HP.OnChange -= OnHpChanged;
+        IsAlive.OnChange -= OnIsAliveChanged;
     }
 
-    private void TeleportToRandomSpawnPoint()
+    [ServerRpc(RequireOwnership = false)]
+    public void SetNicknameServerRpc(string nickname)
     {
-        Vector3 newPosition;
-
-        if (_spawnPoints.Count > 0)
-        {
-            int idx = Random.Range(0, _spawnPoints.Count);
-            newPosition = _spawnPoints[idx].position;
-        }
-        else
-        {
-            newPosition = new Vector3(Random.Range(1f, 5f), 1.5f, Random.Range(1f, 5f));
-        }
-
-        // Применяем телепортацию локально (для хоста)
-        ApplyTeleport(newPosition);
-
-        // Отправляем RPC клиентам
-        TeleportClientRpc(newPosition);
-
-        Debug.Log($"[Server] Teleported player to {newPosition}");
+        Nickname.Value = string.IsNullOrWhiteSpace(nickname)
+            ? $"Player_{OwnerId}"
+            : nickname.Trim();
     }
 
-    private void ApplyTeleport(Vector3 newPosition)
+    private void OnNicknameChanged(string oldValue, string newValue, bool asServer)
     {
-        if (_networkTransform != null)
-        {
-            _networkTransform.enabled = false;
-        }
-
-        transform.position = newPosition;
-
-        StartCoroutine(ReenableNetworkTransform());
     }
 
-    private IEnumerator ReenableNetworkTransform()
+    private void OnHpChanged(int oldValue, int newValue, bool asServer)
     {
-        yield return null;
-        if (_networkTransform != null)
-        {
-            _networkTransform.enabled = true;
-        }
-    }
+        if (!IsServerInitialized) return;
 
-    [ClientRpc]
-    private void TeleportClientRpc(Vector3 newPosition)
-    {
-        // Применяем только для чистых клиентов (не сервер)
-        if (!IsServer)
-        {
-            ApplyTeleport(newPosition);
-            Debug.Log($"[Client] Teleported to {newPosition}");
-        }
-    }
-
-    public override void OnNetworkDespawn()
-    {
-        HP.OnValueChanged -= OnHpChanged;
-        IsAlive.OnValueChanged -= OnIsAliveChanged;
-    }
-
-    private void OnHpChanged(int prev, int next)
-    {
-        if (!IsServer) return;
-
-        if (next <= 0 && IsAlive.Value)
+        if (newValue <= 0 && IsAlive.Value)
         {
             IsAlive.Value = false;
             StartCoroutine(RespawnRoutine());
@@ -150,58 +69,37 @@ public class PlayerNetwork : NetworkBehaviour
 
     private IEnumerator RespawnRoutine()
     {
-        Debug.Log($"[Server] Player {Nickname.Value} died. Respawning in 5 seconds...");
+        Debug.Log($"[Server] Player {Nickname.Value} died. Respawning...");
 
-        // 0-2 сек: чёрный цвет уже установлен через OnIsAliveChanged
-
-        // Ждём 2 секунды
         yield return new WaitForSeconds(2f);
+        HideModelObserversRpc(true);
 
-        // Скрываем модель на всех клиентах
-        HideModelClientRpc(true);
-
-        // Ждём ещё 6 секунд
         yield return new WaitForSeconds(3f);
-
-        // Телепортируем
-        if (IsServer)
-        {
-            TeleportToRandomSpawnPoint();
-        }
+        TeleportToRandomSpawnPoint();
 
         yield return new WaitForSeconds(2f);
-
-        // Показываем модель
-        HideModelClientRpc(false);
-
-        yield return null;
+        HideModelObserversRpc(false);
 
         HP.Value = 100;
         IsAlive.Value = true;
-
-        Debug.Log($"[Server] Player {Nickname.Value} respawned at {transform.position}");
     }
 
-    [ClientRpc]
-    private void HideModelClientRpc(bool hide)
+    [ObserversRpc]
+    private void HideModelObserversRpc(bool hide)
     {
         Renderer renderer = GetComponent<Renderer>();
         if (renderer != null)
-        {
             renderer.enabled = !hide;
-        }
-        canvas.SetActive(!hide);
+        if (canvas != null)
+            canvas.SetActive(!hide);
     }
 
-    private void OnIsAliveChanged(bool prev, bool next)
+    private void OnIsAliveChanged(bool oldValue, bool newValue, bool asServer)
     {
-        SetPlayerColor(next);
-
+        SetPlayerColor(newValue);
         Collider col = GetComponent<Collider>();
         if (col != null)
-        {
-            col.enabled = next;
-        }
+            col.enabled = newValue;
     }
 
     private void SetPlayerColor(bool isAlive)
@@ -215,18 +113,23 @@ public class PlayerNetwork : NetworkBehaviour
             return;
         }
 
-        if (OwnerClientId == 0)
+        if (OwnerId == 0)
             renderer.material.color = Color.pink;
-        else
+        else if (pinkMat != null)
             renderer.material = pinkMat;
     }
 
-#pragma warning disable CS0618
-    [ServerRpc(RequireOwnership = false)]
-#pragma warning restore CS0618
-    private void SubmitNicknameServerRpc(string nickname)
+    private void TeleportToRandomSpawnPoint()
     {
-        string safeValue = string.IsNullOrWhiteSpace(nickname) ? $"Player_{OwnerClientId}" : nickname.Trim();
-        Nickname.Value = safeValue;
+        GameObject[] spawnObjects = GameObject.FindGameObjectsWithTag("SpawnPoint");
+        if (spawnObjects.Length > 0)
+        {
+            int idx = Random.Range(0, spawnObjects.Length);
+            transform.position = spawnObjects[idx].transform.position;
+        }
+        else
+        {
+            transform.position = new Vector3(Random.Range(1f, 5f), 1.5f, Random.Range(1f, 5f));
+        }
     }
 }

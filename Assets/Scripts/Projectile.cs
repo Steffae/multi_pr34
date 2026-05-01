@@ -1,4 +1,4 @@
-using Unity.Netcode;
+using FishNet.Object;
 using UnityEngine;
 
 public class Projectile : NetworkBehaviour
@@ -9,44 +9,39 @@ public class Projectile : NetworkBehaviour
 
     private bool _hasHit = false;
 
-    public override void OnNetworkSpawn()
+    public override void OnStartNetwork()
     {
-        if (IsServer)
+        base.OnStartNetwork();
+
+        if (base.IsServerInitialized)
         {
-            // Запускаем таймер на уничтожение только после спавна
             Invoke(nameof(DespawnProjectile), _lifetime);
         }
     }
 
     private void Update()
     {
-        // Двигаем снаряд вперёд
         transform.Translate(Vector3.forward * _speed * Time.deltaTime);
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        // Только сервер обрабатывает попадание
-        if (!IsServer) return;
-
-        // Защита от множественных попаданий в одном кадре
+        if (!base.IsServerInitialized) return;
         if (_hasHit) return;
 
         var target = other.GetComponent<PlayerNetwork>();
         if (target == null) return;
 
         // Не наносим урон самому себе
-        if (target.OwnerClientId == OwnerClientId) return;
+        if (target.OwnerId == OwnerId) return;
 
         _hasHit = true;
 
-        // Наносим урон
         int newHp = Mathf.Max(0, target.HP.Value - _damage);
         target.HP.Value = newHp;
 
         Debug.Log($"[Server] Projectile hit {target.Nickname.Value} for {_damage} damage. HP: {newHp}");
 
-        // Уничтожаем снаряд
         DespawnProjectile();
     }
 
@@ -54,14 +49,12 @@ public class Projectile : NetworkBehaviour
     {
         CancelInvoke();
 
-        // Проверяем, что объект действительно заспавнен в сети
-        if (IsSpawned)
+        if (base.IsSpawned)
         {
-            NetworkObject.Despawn(destroy: true);
+            base.Despawn(gameObject);
         }
         else
         {
-            // Если ещё не заспавнен — просто уничтожаем локально
             Destroy(gameObject);
         }
     }

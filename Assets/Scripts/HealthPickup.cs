@@ -1,4 +1,4 @@
-using Unity.Netcode;
+using FishNet.Object;
 using UnityEngine;
 
 public class HealthPickup : NetworkBehaviour
@@ -17,14 +17,14 @@ public class HealthPickup : NetworkBehaviour
 
     private void Update()
     {
-        // Визуальное вращение
+        // Визуальное вращение аптечки
         transform.Rotate(Vector3.up, _rotationSpeed * Time.deltaTime);
     }
 
     private void OnTriggerEnter(Collider other)
     {
         // Только сервер обрабатывает подбор
-        if (!IsServer) return;
+        if (!base.IsServerInitialized) return;
 
         var player = other.GetComponent<PlayerNetwork>();
         if (player == null) return;
@@ -47,6 +47,6 @@ public class HealthPickup : NetworkBehaviour
         }
 
         // Уничтожаем аптечку
-        NetworkObject.Despawn(destroy: true);
+        base.Despawn(gameObject);
     }
 }

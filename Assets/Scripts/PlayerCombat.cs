@@ -1,4 +1,4 @@
-using Unity.Netcode;
+using FishNet.Object;
 using UnityEngine;
 
 public class PlayerCombat : NetworkBehaviour
@@ -14,9 +14,11 @@ public class PlayerCombat : NetworkBehaviour
         _inputHandler = GetComponent<PlayerInputHandler>();
     }
 
-    public override void OnNetworkSpawn()
+    public override void OnStartNetwork()
     {
-        if (!IsOwner) return;
+        base.OnStartNetwork();
+
+        if (OwnerId == base.LocalConnection.ClientId) return;
 
         if (_inputHandler != null)
         {
@@ -24,9 +26,11 @@ public class PlayerCombat : NetworkBehaviour
         }
     }
 
-    public override void OnNetworkDespawn()
+    public override void OnStopNetwork()
     {
-        if (!IsOwner) return;
+        base.OnStopNetwork();
+
+        if (OwnerId != base.LocalConnection.ClientId) return;
 
         if (_inputHandler != null)
         {
@@ -36,7 +40,7 @@ public class PlayerCombat : NetworkBehaviour
 
     private void OnAttackInput()
     {
-        if (!IsOwner) return;
+        if (OwnerId != base.LocalConnection.ClientId) return;
         TryFindAndAttack();
     }
 
@@ -65,15 +69,25 @@ public class PlayerCombat : NetworkBehaviour
 
     public void TryAttack(PlayerNetwork target)
     {
-        if (!IsOwner || target == null) return;
-        DealDamageServerRpc(target.NetworkObjectId, _damage);
+        if (OwnerId != base.LocalConnection.ClientId || target == null) return;
+        DealDamageServerRpc(target.NetworkObject.ObjectId, _damage);
     }
 
     [ServerRpc]
-    private void DealDamageServerRpc(ulong targetObjectId, int damage)
+    private void DealDamageServerRpc(int targetObjectId, int damage)
     {
-        if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(targetObjectId, out NetworkObject targetObject))
-            return;
+        // Ищем объект по NetworkObjectId
+        NetworkObject targetObject = null;
+        foreach (NetworkObject nob in FishNet.InstanceFinder.ServerManager.Objects.Spawned.Values)
+        {
+            if (nob.ObjectId == targetObjectId)
+            {
+                targetObject = nob;
+                break;
+            }
+        }
+
+        if (targetObject == null) return;
 
         PlayerNetwork targetPlayer = targetObject.GetComponent<PlayerNetwork>();
 
