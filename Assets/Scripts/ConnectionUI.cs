@@ -1,5 +1,6 @@
 using FishNet;
 using FishNet.Transporting;
+using FishNet.Transporting.Tugboat;
 using TMPro;
 using UnityEngine;
 
@@ -8,13 +9,12 @@ public class ConnectionUI : MonoBehaviour
     [SerializeField] private TMP_InputField _nicknameInput;
     [SerializeField] private TMP_InputField _ipInput;
     [SerializeField] private GameObject _menuPanel;
-    [SerializeField] private GameObject _lobbyPanel;  // добавить
+    [SerializeField] private GameObject _lobbyPanel;
 
     public static string PlayerNickname { get; private set; } = "Player";
 
     private void Start()
     {
-        // При старте: меню видно, лобби скрыто
         if (_menuPanel != null) _menuPanel.SetActive(true);
         if (_lobbyPanel != null) _lobbyPanel.SetActive(false);
 
@@ -50,6 +50,24 @@ public class ConnectionUI : MonoBehaviour
     public void StartAsClient()
     {
         SaveNickname();
+
+        // Устанавливаем IP клиента
+        string ip = "127.0.0.1";
+        if (_ipInput != null && !string.IsNullOrWhiteSpace(_ipInput.text))
+        {
+            ip = _ipInput.text.Trim();
+        }
+
+        Debug.Log($"[ConnectionUI] Connecting to server: {ip}");
+
+        // Настраиваем транспорт Tugboat
+        Tugboat transport = InstanceFinder.TransportManager.Transport as Tugboat;
+        if (transport != null)
+        {
+            transport.SetClientAddress(ip);
+            transport.SetPort((ushort)7770);
+        }
+
         InstanceFinder.ClientManager.StartConnection();
     }
 
@@ -63,13 +81,7 @@ public class ConnectionUI : MonoBehaviour
     private void HideMenu()
     {
         Debug.Log("[ConnectionUI] Connection started - hiding menu, showing lobby");
-        if (_menuPanel != null)
-        {
-            _menuPanel.SetActive(false);
-        }
-        if (_lobbyPanel != null)
-        {
-            _lobbyPanel.SetActive(true);
-        }
+        if (_menuPanel != null) _menuPanel.SetActive(false);
+        if (_lobbyPanel != null) _lobbyPanel.SetActive(true);
     }
 }
