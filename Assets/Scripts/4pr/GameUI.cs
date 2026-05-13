@@ -68,16 +68,14 @@ public class GameUI : MonoBehaviour
         if (_lobbyPanel != null) _lobbyPanel.SetActive(true);
         if (_resultsPanel != null) _resultsPanel.SetActive(false);
         if (_matchTimerText != null) _matchTimerText.gameObject.SetActive(false);
+        if (_lobbyStatusText != null) _lobbyStatusText.gameObject.SetActive(true);
     }
 
     private void ShowGameplay()
     {
-        if (_lobbyPanel != null) _lobbyPanel.SetActive(true); // оставляем для таймера
+        if (_lobbyPanel != null) _lobbyPanel.SetActive(false);
         if (_resultsPanel != null) _resultsPanel.SetActive(false);
         if (_matchTimerText != null) _matchTimerText.gameObject.SetActive(true);
-
-        // Скрываем текст статуса в лобби
-        if (_lobbyStatusText != null) _lobbyStatusText.gameObject.SetActive(false);
     }
 
     private void ShowResults()
