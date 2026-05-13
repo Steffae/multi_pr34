@@ -257,6 +257,7 @@ GameObject:
   - component: {fileID: 685272965}
   - component: {fileID: 685272964}
   - component: {fileID: 685272963}
+  - component: {fileID: 685272966}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -319,6 +320,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &685272966
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 685272962}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 15895a51081447d46bda466e7e830c08, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Managing.Scened.SceneManager
+  _sceneProcessor: {fileID: 0}
+  _lightProbeUpdating: 0
+  _moveClientObjects: 1
+  _setActiveScene: 1
 --- !u!1 &994327827
 GameObject:
   m_ObjectHideFlags: 0
@@ -1788,9 +1805,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ConnectionUI
   _nicknameInput: {fileID: 6188655819320538779}
-  _ipInput: {fileID: 0}
   _menuPanel: {fileID: 6567035551818739782}
-  _gameSceneName: GameScene
 --- !u!222 &8484994132599283628
 CanvasRenderer:
   m_ObjectHideFlags: 0
