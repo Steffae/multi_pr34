@@ -6,6 +6,7 @@ public class PlayerUI : NetworkBehaviour
 {
     [SerializeField] private TMP_Text _ammoText;
     [SerializeField] private TMP_Text _respawnTimerText;
+    [SerializeField] private GameObject _playerUIPanel; // добавить ссылку на панель
 
     private PlayerShooting _playerShooting;
     private PlayerNetwork _playerNetwork;
@@ -21,18 +22,15 @@ public class PlayerUI : NetworkBehaviour
     {
         base.OnStartNetwork();
 
-        // Скрываем UI для чужих игроков
         if (OwnerId != base.LocalConnection.ClientId)
         {
             gameObject.SetActive(false);
             return;
         }
 
-        // Подписываемся на изменения
         if (_playerShooting != null)
         {
             _playerShooting.CurrentAmmo.OnChange += OnAmmoChanged;
-            // Показываем начальное значение
             OnAmmoChanged(0, _playerShooting.CurrentAmmo.Value, false);
         }
 
@@ -40,6 +38,15 @@ public class PlayerUI : NetworkBehaviour
         {
             _playerNetwork.IsAlive.OnChange += OnIsAliveChanged;
             OnIsAliveChanged(true, _playerNetwork.IsAlive.Value, false);
+        }
+
+        // Подписываемся на смену состояния игры
+        GameManager.OnLocalGameStateChanged += OnGameStateChanged;
+
+        // Если GameManager уже существует — сразу применить состояние
+        if (GameManager.Instance != null)
+        {
+            OnGameStateChanged(GameManager.Instance.CurrentState.Value);
         }
     }
 
@@ -57,6 +64,24 @@ public class PlayerUI : NetworkBehaviour
         if (_playerNetwork != null)
         {
             _playerNetwork.IsAlive.OnChange -= OnIsAliveChanged;
+        }
+
+        GameManager.OnLocalGameStateChanged -= OnGameStateChanged;
+    }
+
+    private void OnGameStateChanged(GameManager.GameState newState)
+    {
+        // Показываем UI только во время игры
+        bool showUI = (newState == GameManager.GameState.InProgress);
+
+        if (_playerUIPanel != null)
+        {
+            _playerUIPanel.SetActive(showUI);
+        }
+        else
+        {
+            // Если панель не назначена, скрываем весь объект
+            gameObject.SetActive(showUI);
         }
     }
 

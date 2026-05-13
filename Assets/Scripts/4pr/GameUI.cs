@@ -7,6 +7,7 @@ public class GameUI : MonoBehaviour
     [SerializeField] private GameObject _lobbyPanel;
     [SerializeField] private TMP_Text _lobbyStatusText;
     [SerializeField] private TMP_Text _matchTimerText;
+    [SerializeField] private TMP_Text _countdownText;
     [SerializeField] private GameObject _resultsPanel;
     [SerializeField] private TMP_Text _resultsText;
 
@@ -15,6 +16,7 @@ public class GameUI : MonoBehaviour
         GameManager.OnLocalGameStateChanged += OnGameStateChanged;
         GameManager.OnLocalConnectedPlayersChanged += OnConnectedPlayersChanged;
         GameManager.OnLocalMatchTimerChanged += OnMatchTimerChanged;
+        GameManager.OnLocalCountdownTimerChanged += OnCountdownTimerChanged;
     }
 
     private void OnDisable()
@@ -22,11 +24,11 @@ public class GameUI : MonoBehaviour
         GameManager.OnLocalGameStateChanged -= OnGameStateChanged;
         GameManager.OnLocalConnectedPlayersChanged -= OnConnectedPlayersChanged;
         GameManager.OnLocalMatchTimerChanged -= OnMatchTimerChanged;
+        GameManager.OnLocalCountdownTimerChanged -= OnCountdownTimerChanged;
     }
 
     private void Start()
     {
-        // Начальное состояние — показываем лобби
         ShowLobby();
     }
 
@@ -36,6 +38,9 @@ public class GameUI : MonoBehaviour
         {
             case GameManager.GameState.WaitingForPlayers:
                 ShowLobby();
+                break;
+            case GameManager.GameState.StartingSoon:
+                ShowCountdown();
                 break;
             case GameManager.GameState.InProgress:
                 ShowGameplay();
@@ -48,7 +53,8 @@ public class GameUI : MonoBehaviour
 
     private void OnConnectedPlayersChanged(int players)
     {
-        if (_lobbyStatusText != null)
+        if (_lobbyStatusText != null && GameManager.Instance != null
+            && GameManager.Instance.CurrentState.Value == GameManager.GameState.WaitingForPlayers)
         {
             _lobbyStatusText.text = $"Ожидание игроков: {players}/2";
         }
@@ -63,12 +69,37 @@ public class GameUI : MonoBehaviour
         }
     }
 
+    private void OnCountdownTimerChanged(float time)
+    {
+        if (_countdownText != null)
+        {
+            int seconds = Mathf.CeilToInt(time);
+            _countdownText.text = $"Игра начнётся через: {seconds}";
+        }
+    }
+
     private void ShowLobby()
     {
         if (_lobbyPanel != null) _lobbyPanel.SetActive(true);
         if (_resultsPanel != null) _resultsPanel.SetActive(false);
         if (_matchTimerText != null) _matchTimerText.gameObject.SetActive(false);
+        if (_countdownText != null) _countdownText.gameObject.SetActive(false);
         if (_lobbyStatusText != null) _lobbyStatusText.gameObject.SetActive(true);
+
+        // Обновить текст статуса
+        if (GameManager.Instance != null)
+        {
+            _lobbyStatusText.text = $"Ожидание игроков: {GameManager.Instance.ConnectedPlayers.Value}/2";
+        }
+    }
+
+    private void ShowCountdown()
+    {
+        if (_lobbyPanel != null) _lobbyPanel.SetActive(true);
+        if (_resultsPanel != null) _resultsPanel.SetActive(false);
+        if (_matchTimerText != null) _matchTimerText.gameObject.SetActive(false);
+        if (_countdownText != null) _countdownText.gameObject.SetActive(true);
+        if (_lobbyStatusText != null) _lobbyStatusText.gameObject.SetActive(false);
     }
 
     private void ShowGameplay()
@@ -76,12 +107,15 @@ public class GameUI : MonoBehaviour
         if (_lobbyPanel != null) _lobbyPanel.SetActive(false);
         if (_resultsPanel != null) _resultsPanel.SetActive(false);
         if (_matchTimerText != null) _matchTimerText.gameObject.SetActive(true);
+        if (_countdownText != null) _countdownText.gameObject.SetActive(false);
     }
 
     private void ShowResults()
     {
         if (_lobbyPanel != null) _lobbyPanel.SetActive(false);
         if (_resultsPanel != null) _resultsPanel.SetActive(true);
+        if (_matchTimerText != null) _matchTimerText.gameObject.SetActive(false);
+        if (_countdownText != null) _countdownText.gameObject.SetActive(false);
 
         if (_resultsText != null)
         {

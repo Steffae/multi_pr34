@@ -411,6 +411,7 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 2156335736783277746}
   _ammoText: {fileID: 8291295997592382881}
   _respawnTimerText: {fileID: 3685224053588879272}
+  _playerUIPanel: {fileID: 4553439043189850268}
 --- !u!1 &5332833827901396125
 GameObject:
   m_ObjectHideFlags: 0
