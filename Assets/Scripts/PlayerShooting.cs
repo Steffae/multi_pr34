@@ -78,4 +78,33 @@ public class PlayerShooting : NetworkBehaviour
             Destroy(projectileObj);
         }
     }
+
+    public void ResetAmmo()
+    {
+        if (IsServerInitialized)
+        {
+            CurrentAmmo.Value = 3; // Стартовые патроны
+            _lastShotTime = 0f;
+        }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void AddAmmoServerRpc(int amount)
+    {
+        CurrentAmmo.Value = Mathf.Min(9, CurrentAmmo.Value + amount); // Максимум 9 патронов
+        Debug.Log($"[PlayerShooting] Ammo added: {amount}, now: {CurrentAmmo.Value}");
+    }
+
+    public void AddAmmo(int amount)
+    {
+        if (IsServerInitialized)
+        {
+            CurrentAmmo.Value = Mathf.Min(3, CurrentAmmo.Value + amount); // Максимум 3
+            Debug.Log($"[PlayerShooting] Ammo added: {amount}, now: {CurrentAmmo.Value}");
+        }
+        else if (IsOwner)
+        {
+            AddAmmoServerRpc(amount);
+        }
+    }
 }

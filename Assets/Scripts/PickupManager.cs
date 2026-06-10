@@ -1,23 +1,32 @@
 using FishNet;
 using FishNet.Object;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class PickupManager : MonoBehaviour
 {
-    [SerializeField] private GameObject _healthPickupPrefab;
-    [SerializeField] private Transform[] _spawnPoints;
+    [Header("Pickup Prefabs")]
+    [SerializeField] private GameObject _heartPickupPrefab;
+    [SerializeField] private GameObject _ammoPickupPrefab;
+
+    [Header("Spawn Points")]
+    [SerializeField] private Transform[] _heartSpawnPoints;
+    [SerializeField] private Transform[] _ammoSpawnPoints;
+
+    [Header("Settings")]
     [SerializeField] private float _respawnDelay = 10f;
+
+    private Dictionary<Vector3, bool> _heartSpawnStatus = new Dictionary<Vector3, bool>();
+    private Dictionary<Vector3, bool> _ammoSpawnStatus = new Dictionary<Vector3, bool>();
 
     private void Start()
     {
-        // Подписываемся на событие запуска сервера
         if (InstanceFinder.ServerManager != null)
         {
             InstanceFinder.ServerManager.OnServerConnectionState += OnServerConnectionState;
         }
 
-        // Если сервер уже запущен (проверяем через ServerManager)
         if (InstanceFinder.ServerManager != null && InstanceFinder.ServerManager.Started)
         {
             SpawnAll();
@@ -43,43 +52,89 @@ public class PickupManager : MonoBehaviour
 
     private void SpawnAll()
     {
-        if (_spawnPoints == null || _spawnPoints.Length == 0)
+        SpawnAllHearts();
+        SpawnAllAmmo();
+    }
+
+    private void SpawnAllHearts()
+    {
+        if (_heartSpawnPoints == null || _heartSpawnPoints.Length == 0)
         {
-            Debug.LogError("[PickupManager] No spawn points assigned!");
+            Debug.LogWarning("[PickupManager] No heart spawn points assigned!");
             return;
         }
 
-        foreach (var point in _spawnPoints)
+        foreach (var point in _heartSpawnPoints)
         {
             if (point != null)
             {
-                SpawnPickup(point.position);
+                _heartSpawnStatus[point.position] = true;
+                SpawnHeart(point.position);
             }
         }
     }
 
-    public void OnPickedUp(Vector3 position)
+    private void SpawnAllAmmo()
     {
-        StartCoroutine(RespawnAfterDelay(position));
-    }
-
-    private IEnumerator RespawnAfterDelay(Vector3 position)
-    {
-        yield return new WaitForSeconds(_respawnDelay);
-        SpawnPickup(position);
-    }
-
-    private void SpawnPickup(Vector3 position)
-    {
-        if (_healthPickupPrefab == null)
+        if (_ammoSpawnPoints == null || _ammoSpawnPoints.Length == 0)
         {
-            Debug.LogError("[PickupManager] Health pickup prefab is null!");
+            Debug.LogWarning("[PickupManager] No ammo spawn points assigned!");
             return;
         }
 
-        GameObject go = Instantiate(_healthPickupPrefab, position, Quaternion.identity);
+        foreach (var point in _ammoSpawnPoints)
+        {
+            if (point != null)
+            {
+                _ammoSpawnStatus[point.position] = true;
+                SpawnAmmo(point.position);
+            }
+        }
+    }
 
-        HealthPickup pickup = go.GetComponent<HealthPickup>();
+    public void OnHeartPickedUp(Vector3 position)
+    {
+        _heartSpawnStatus[position] = false;
+        StartCoroutine(RespawnHeartAfterDelay(position));
+    }
+
+    public void OnAmmoPickedUp(Vector3 position)
+    {
+        _ammoSpawnStatus[position] = false;
+        StartCoroutine(RespawnAmmoAfterDelay(position));
+    }
+
+    private IEnumerator RespawnHeartAfterDelay(Vector3 position)
+    {
+        yield return new WaitForSeconds(_respawnDelay);
+        if (!_heartSpawnStatus[position])
+        {
+            _heartSpawnStatus[position] = true;
+            SpawnHeart(position);
+        }
+    }
+
+    private IEnumerator RespawnAmmoAfterDelay(Vector3 position)
+    {
+        yield return new WaitForSeconds(_respawnDelay);
+        if (!_ammoSpawnStatus[position])
+        {
+            _ammoSpawnStatus[position] = true;
+            SpawnAmmo(position);
+        }
+    }
+
+    private void SpawnHeart(Vector3 position)
+    {
+        if (_heartPickupPrefab == null)
+        {
+            Debug.LogError("[PickupManager] Heart pickup prefab is null!");
+            return;
+        }
+
+        GameObject go = Instantiate(_heartPickupPrefab, position, Quaternion.identity);
+
+        HeartPickup pickup = go.GetComponent<HeartPickup>();
         if (pickup != null)
         {
             pickup.Init(this);
@@ -88,14 +143,32 @@ public class PickupManager : MonoBehaviour
         NetworkObject networkObject = go.GetComponent<NetworkObject>();
         if (networkObject != null)
         {
-            // Спавним объект в сети
             InstanceFinder.ServerManager.Spawn(networkObject);
-            Debug.Log($"[PickupManager] Spawned health pickup at {position}");
+            Debug.Log($"[PickupManager] Spawned heart at {position}");
         }
-        else
+    }
+
+    private void SpawnAmmo(Vector3 position)
+    {
+        if (_ammoPickupPrefab == null)
         {
-            Debug.LogError("[PickupManager] Prefab has no NetworkObject component!");
-            Destroy(go);
+            Debug.LogError("[PickupManager] Ammo pickup prefab is null!");
+            return;
+        }
+
+        GameObject go = Instantiate(_ammoPickupPrefab, position, Quaternion.identity);
+
+        AmmoPickup pickup = go.GetComponent<AmmoPickup>();
+        if (pickup != null)
+        {
+            pickup.Init(this);
+        }
+
+        NetworkObject networkObject = go.GetComponent<NetworkObject>();
+        if (networkObject != null)
+        {
+            InstanceFinder.ServerManager.Spawn(networkObject);
+            Debug.Log($"[PickupManager] Spawned ammo at {position}");
         }
     }
 }

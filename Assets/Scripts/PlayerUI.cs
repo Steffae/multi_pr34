@@ -1,52 +1,67 @@
 using FishNet.Object;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
 
 public class PlayerUI : NetworkBehaviour
 {
+    [Header("Ammo Display")]
     [SerializeField] private TMP_Text _ammoText;
+
+    [Header("Respawn Timer")]
+    [SerializeField] private GameObject _respawnTimerPanel;
     [SerializeField] private TMP_Text _respawnTimerText;
-    [SerializeField] private GameObject _playerUIPanel; // добавить ссылку на панель
 
     private PlayerShooting _playerShooting;
     private PlayerNetwork _playerNetwork;
-    private bool _isDead;
+    private bool _isDead = false;
 
     private void Awake()
     {
+        // Ищем компоненты на родительском объекте
         _playerShooting = GetComponentInParent<PlayerShooting>();
         _playerNetwork = GetComponentInParent<PlayerNetwork>();
+
+        Debug.Log($"[PlayerUI] Awake - Found PlayerShooting: {_playerShooting != null}, PlayerNetwork: {_playerNetwork != null}");
     }
 
     public override void OnStartNetwork()
     {
         base.OnStartNetwork();
 
+        // Только свой игрок видит свой UI
         if (OwnerId != base.LocalConnection.ClientId)
         {
             gameObject.SetActive(false);
             return;
         }
 
+        Debug.Log($"[PlayerUI] OnStartNetwork - OwnerId={OwnerId}, LocalClientId={LocalConnection.ClientId}");
+
         if (_playerShooting != null)
         {
             _playerShooting.CurrentAmmo.OnChange += OnAmmoChanged;
             OnAmmoChanged(0, _playerShooting.CurrentAmmo.Value, false);
         }
+        else
+        {
+            Debug.LogError("[PlayerUI] PlayerShooting component not found on parent!");
+        }
 
         if (_playerNetwork != null)
         {
             _playerNetwork.IsAlive.OnChange += OnIsAliveChanged;
-            OnIsAliveChanged(true, _playerNetwork.IsAlive.Value, false);
         }
 
-        // Подписываемся на смену состояния игры
-        GameManager.OnLocalGameStateChanged += OnGameStateChanged;
+        // Скрываем таймер респавна в начале
+        if (_respawnTimerPanel != null)
+            _respawnTimerPanel.SetActive(false);
 
-        // Если GameManager уже существует — сразу применить состояние
+        // Подписываемся на смену состояния игры
         if (GameManager.Instance != null)
         {
-            OnGameStateChanged(GameManager.Instance.CurrentState.Value);
+            GameManager.OnLocalGameStateChanged += OnGameStateChanged;
         }
     }
 
@@ -57,39 +72,29 @@ public class PlayerUI : NetworkBehaviour
         if (OwnerId != base.LocalConnection.ClientId) return;
 
         if (_playerShooting != null)
-        {
             _playerShooting.CurrentAmmo.OnChange -= OnAmmoChanged;
-        }
-
         if (_playerNetwork != null)
-        {
             _playerNetwork.IsAlive.OnChange -= OnIsAliveChanged;
-        }
-
-        GameManager.OnLocalGameStateChanged -= OnGameStateChanged;
+        if (GameManager.Instance != null)
+            GameManager.OnLocalGameStateChanged -= OnGameStateChanged;
     }
 
     private void OnGameStateChanged(GameManager.GameState newState)
     {
-        // Показываем UI только во время игры
-        bool showUI = (newState == GameManager.GameState.InProgress);
+        bool shouldShow = (newState == GameManager.GameState.InProgress);
 
-        if (_playerUIPanel != null)
-        {
-            _playerUIPanel.SetActive(showUI);
-        }
-        else
-        {
-            // Если панель не назначена, скрываем весь объект
-            gameObject.SetActive(showUI);
-        }
+        if (_ammoText != null)
+            _ammoText.gameObject.SetActive(shouldShow);
+        if (_respawnTimerPanel != null)
+            _respawnTimerPanel.SetActive(shouldShow && _isDead);
     }
 
     private void OnAmmoChanged(int oldValue, int newValue, bool asServer)
     {
         if (_ammoText != null)
         {
-            _ammoText.text = $"Ammo: {newValue}";
+            _ammoText.text = $"Balls: {newValue}";
+            Debug.Log($"[PlayerUI] Ammo updated: {newValue}");
         }
     }
 
@@ -97,9 +102,11 @@ public class PlayerUI : NetworkBehaviour
     {
         _isDead = !newValue;
 
-        if (_respawnTimerText != null)
+        if (_respawnTimerPanel != null)
         {
-            _respawnTimerText.gameObject.SetActive(_isDead);
+            bool shouldShowTimer = (GameManager.Instance != null &&
+                GameManager.Instance.CurrentState.Value == GameManager.GameState.InProgress && _isDead);
+            _respawnTimerPanel.SetActive(shouldShowTimer);
         }
 
         if (_isDead)
@@ -108,9 +115,9 @@ public class PlayerUI : NetworkBehaviour
         }
     }
 
-    private System.Collections.IEnumerator RespawnTimerCoroutine()
+    private IEnumerator RespawnTimerCoroutine()
     {
-        float timer = 5f;
+        float timer = 3f;
 
         while (timer > 0 && _isDead)
         {

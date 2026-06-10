@@ -4,7 +4,6 @@ using UnityEngine;
 public class Projectile : NetworkBehaviour
 {
     [SerializeField] private float _speed = 18f;
-    [SerializeField] private int _damage = 20;
     [SerializeField] private float _lifetime = 5f;
 
     private bool _hasHit = false;
@@ -32,17 +31,44 @@ public class Projectile : NetworkBehaviour
         var target = other.GetComponent<PlayerNetwork>();
         if (target == null) return;
 
-        // Не наносим урон самому себе
+        // Нельзя атаковать себя
         if (target.OwnerId == OwnerId) return;
+
+        // Нельзя атаковать мёртвого
+        if (!target.IsAlive.Value) return;
 
         _hasHit = true;
 
-        int newHp = Mathf.Max(0, target.HP.Value - _damage);
-        target.HP.Value = newHp;
+        // Забираем 1 сердечко у цели
+        int targetHearts = target.HP.Value;
+        if (targetHearts > 0)
+        {
+            target.HP.Value = targetHearts - 1;
 
-        Debug.Log($"[Server] Projectile hit {target.Nickname.Value} for {_damage} damage. HP: {newHp}");
+            // Добавляем сердечко стрелку
+            var shooter = GetShooterPlayer();
+            if (shooter != null && shooter.IsAlive.Value)
+            {
+                shooter.HP.Value = Mathf.Min(9, shooter.HP.Value + 1);
+                Debug.Log($"[Server] {shooter.Nickname.Value} stole a heart from {target.Nickname.Value}! Now: shooter={shooter.HP.Value}, target={target.HP.Value}");
+            }
+        }
 
         DespawnProjectile();
+    }
+
+    private PlayerNetwork GetShooterPlayer()
+    {
+        if (OwnerId < 0) return null;
+
+        foreach (var nob in FishNet.InstanceFinder.ServerManager.Objects.Spawned.Values)
+        {
+            if (nob.OwnerId == OwnerId)
+            {
+                return nob.GetComponent<PlayerNetwork>();
+            }
+        }
+        return null;
     }
 
     private void DespawnProjectile()

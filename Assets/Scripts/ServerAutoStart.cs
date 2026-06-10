@@ -5,7 +5,6 @@ public class ServerAutoStart : MonoBehaviour
 {
     private void Start()
     {
-        // Application.isBatchMode = true, когда Unity запущен без графики (headless/Dedicated Server)
         if (Application.isBatchMode)
         {
             Debug.Log("[Server] Headless mode detected. Starting server automatically...");
@@ -13,7 +12,8 @@ public class ServerAutoStart : MonoBehaviour
         }
         else
         {
-            Debug.Log("[ServerAutoStart] Not in batch mode - server will be started manually via UI");
+            Debug.Log("[ServerAutoStart] Not in batch mode - waiting for manual start");
+            // В редакторе сервер не запускаем автоматически
         }
     }
 }
