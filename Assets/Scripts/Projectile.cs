@@ -34,24 +34,23 @@ public class Projectile : NetworkBehaviour
         // Нельзя атаковать себя
         if (target.OwnerId == OwnerId) return;
 
-        // Нельзя атаковать мёртвого
+        // НЕ АТАКУЕМ МЁРТВЫХ
         if (!target.IsAlive.Value) return;
+
+        // НЕ АТАКУЕМ ЕСЛИ У ЦЕЛИ 0 СЕРДЕЧЕК
+        if (target.HP.Value <= 0) return;
 
         _hasHit = true;
 
         // Забираем 1 сердечко у цели
-        int targetHearts = target.HP.Value;
-        if (targetHearts > 0)
-        {
-            target.HP.Value = targetHearts - 1;
+        target.HP.Value = target.HP.Value - 1;
 
-            // Добавляем сердечко стрелку
-            var shooter = GetShooterPlayer();
-            if (shooter != null && shooter.IsAlive.Value)
-            {
-                shooter.HP.Value = Mathf.Min(9, shooter.HP.Value + 1);
-                Debug.Log($"[Server] {shooter.Nickname.Value} stole a heart from {target.Nickname.Value}! Now: shooter={shooter.HP.Value}, target={target.HP.Value}");
-            }
+        // Добавляем сердечко стрелку
+        var shooter = GetShooterPlayer();
+        if (shooter != null && shooter.IsAlive.Value && shooter.HP.Value < 9)
+        {
+            shooter.HP.Value = shooter.HP.Value + 1;
+            Debug.Log($"[Server] {shooter.Nickname.Value} stole a heart from {target.Nickname.Value}! Now: shooter={shooter.HP.Value}, target={target.HP.Value}");
         }
 
         DespawnProjectile();

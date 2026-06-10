@@ -54,6 +54,12 @@ public class PlayerMovementPredicted : NetworkBehaviour
         _moveInput = input;
     }
 
+    public void ResetState()
+    {
+        _verticalVelocity = 0f;
+        _moveInput = Vector2.zero;
+    }
+
     private void OnTick()
     {
         if (base.IsOwner)

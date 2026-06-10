@@ -14,9 +14,36 @@ public class PlayerNetwork : NetworkBehaviour
 
     private bool _nicknameSent = false;
 
+    private static Vector3[] _cachedSpawnPoints;
+    private static bool _spawnPointsCached = false;
+
+    private void CacheSpawnPoints()
+    {
+        if (_spawnPointsCached) return;
+
+        GameObject[] spawnObjects = GameObject.FindGameObjectsWithTag("SpawnPoint");
+        if (spawnObjects.Length > 0)
+        {
+            _cachedSpawnPoints = new Vector3[spawnObjects.Length];
+            for (int i = 0; i < spawnObjects.Length; i++)
+            {
+                _cachedSpawnPoints[i] = spawnObjects[i].transform.position;
+                Debug.Log($"[PlayerNetwork] Cached spawn point {i}: {_cachedSpawnPoints[i]}");
+            }
+            _spawnPointsCached = true;
+        }
+        else
+        {
+            Debug.LogWarning("[PlayerNetwork] No spawn points found with tag 'SpawnPoint'");
+            _cachedSpawnPoints = new Vector3[0];
+        }
+    }
+
     public override void OnStartNetwork()
     {
         base.OnStartNetwork();
+
+        CacheSpawnPoints();
 
         Nickname.OnChange += OnNicknameChanged;
         HP.OnChange += OnHpChanged;
@@ -27,7 +54,6 @@ public class PlayerNetwork : NetworkBehaviour
 
     private void Update()
     {
-        // Отправляем ник ТОЛЬКО если это наш локальный игрок
         if (!_nicknameSent && IsOwner && IsClientInitialized)
         {
             _nicknameSent = true;
@@ -57,9 +83,9 @@ public class PlayerNetwork : NetworkBehaviour
     {
         if (!IsServerInitialized) return;
 
-        // Если HP (сердечки) дошли до 0 и игрок ещё жив
         if (newValue <= 0 && IsAlive.Value)
         {
+            Debug.Log($"[PlayerNetwork] {Nickname.Value} died! Starting respawn.");
             IsAlive.Value = false;
             StartCoroutine(RespawnRoutine());
         }
@@ -67,28 +93,67 @@ public class PlayerNetwork : NetworkBehaviour
 
     private IEnumerator RespawnRoutine()
     {
+        Debug.Log($"[PlayerNetwork] RespawnRoutine START for {Nickname.Value}");
+
         yield return new WaitForSeconds(3f);
 
-        // Скрываем модель
         HideModelObserversRpc(true);
 
-        // Включаем коллайдер ДО телепорта
-        Collider col = GetComponent<Collider>();
-        if (col != null) col.enabled = true;
+        TeleportToCachedSpawnPoint();
 
-        // Телепорт на точку спавна
-        TeleportToRandomSpawnPoint();
+        // Сброс патронов
+        PlayerShooting shooting = GetComponent<PlayerShooting>();
+        if (shooting != null)
+        {
+            shooting.ResetAmmo();
+        }
 
-        yield return new WaitForSeconds(0.5f);
 
-        // Восстанавливаем с 1 сердечком
         HP.Value = 1;
         IsAlive.Value = true;
 
-        // Показываем модель
         HideModelObserversRpc(false);
 
-        Debug.Log($"[PlayerNetwork] Player {Nickname.Value} respawned");
+        Debug.Log($"[PlayerNetwork] RespawnRoutine END for {Nickname.Value} at {transform.position}");
+    }
+
+    private void TeleportToCachedSpawnPoint()
+    {
+        Vector3 targetPos;
+        if (_cachedSpawnPoints != null && _cachedSpawnPoints.Length > 0)
+        {
+            int idx = Random.Range(0, _cachedSpawnPoints.Length);
+            targetPos = _cachedSpawnPoints[idx];
+            Debug.Log($"[PlayerNetwork] {Nickname.Value} teleported to cached spawn point {idx}: {targetPos}");
+        }
+        else
+        {
+            targetPos = new Vector3(Random.Range(1f, 5f), 1.5f, Random.Range(1f, 5f));
+            Debug.Log($"[PlayerNetwork] {Nickname.Value} teleported to fallback position: {targetPos}");
+        }
+
+        ApplyTeleport(targetPos);
+    }
+
+    private void ApplyTeleport(Vector3 position)
+    {
+        CharacterController cc = GetComponent<CharacterController>();
+        if (cc != null) cc.enabled = false;
+        transform.position = position;
+        if (cc != null) cc.enabled = true;
+        Physics.SyncTransforms();
+
+        TeleportObserversRpc(position);
+    }
+
+    [ObserversRpc]
+    private void TeleportObserversRpc(Vector3 position)
+    {
+        CharacterController cc = GetComponent<CharacterController>();
+        if (cc != null) cc.enabled = false;
+        transform.position = position;
+        if (cc != null) cc.enabled = true;
+        Physics.SyncTransforms();
     }
 
     [ObserversRpc]
@@ -102,8 +167,8 @@ public class PlayerNetwork : NetworkBehaviour
     private void OnIsAliveChanged(bool oldValue, bool newValue, bool asServer)
     {
         SetPlayerColor(newValue);
-        Collider col = GetComponent<Collider>();
-        if (col != null) col.enabled = newValue;
+        CharacterController cc = GetComponent<CharacterController>();
+        if (cc != null) cc.enabled = newValue;
     }
 
     private void SetPlayerColor(bool isAlive)
@@ -118,9 +183,8 @@ public class PlayerNetwork : NetworkBehaviour
     public void ResetForMatch()
     {
         if (!IsServerInitialized) return;
-
-        // Сброс здоровья/сердечек
-        HP.Value = 1;  // Начинаем с 1 сердечка
+        HP.Value = 1;
+        IsAlive.Value = true;
 
         PlayerShooting shooting = GetComponent<PlayerShooting>();
         if (shooting != null)
@@ -128,23 +192,6 @@ public class PlayerNetwork : NetworkBehaviour
             shooting.ResetAmmo();
         }
 
-        IsAlive.Value = true;
-
-        // Телепорт на точку спавна
-        TeleportToRandomSpawnPoint();
-    }
-
-    private void TeleportToRandomSpawnPoint()
-    {
-        GameObject[] spawnObjects = GameObject.FindGameObjectsWithTag("SpawnPoint");
-        if (spawnObjects.Length > 0)
-        {
-            int idx = Random.Range(0, spawnObjects.Length);
-            transform.position = spawnObjects[idx].transform.position;
-        }
-        else
-        {
-            transform.position = new Vector3(Random.Range(1f, 5f), 1.5f, Random.Range(1f, 5f));
-        }
+        TeleportToCachedSpawnPoint();
     }
 }

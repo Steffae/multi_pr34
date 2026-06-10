@@ -8,11 +8,10 @@ using UnityEngine;
 public class ServerPlayerSpawner : MonoBehaviour
 {
     [SerializeField] private NetworkObject _playerPrefab;
-    [SerializeField] private Transform[] _spawnPoints;
+    [SerializeField] private Transform[] _spawnPoints;  // Точки спавна (2 штуки)
 
-    // Храним подключения, для которых ещё не заспавнен игрок
-    private Dictionary<int, NetworkConnection> _pendingConnections = new Dictionary<int, NetworkConnection>();
-    private bool _isMatchStarted = false;
+    private Dictionary<int, int> _playerSpawnIndex = new Dictionary<int, int>();
+    private int _nextSpawnIndex = 0;
 
     private void Start()
     {
@@ -21,7 +20,6 @@ public class ServerPlayerSpawner : MonoBehaviour
             InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
         }
 
-        // Подписываемся на изменение состояния игры
         if (GameManager.Instance != null)
         {
             GameManager.OnLocalGameStateChanged += OnGameStateChanged;
@@ -43,15 +41,9 @@ public class ServerPlayerSpawner : MonoBehaviour
 
     private void OnGameStateChanged(GameManager.GameState newState)
     {
-        if (newState == GameManager.GameState.InProgress && !_isMatchStarted)
+        if (newState == GameManager.GameState.InProgress)
         {
-            _isMatchStarted = true;
-            // Спавним всех ожидающих игроков
             SpawnAllPendingPlayers();
-        }
-        else if (newState == GameManager.GameState.WaitingForPlayers || newState == GameManager.GameState.ReadyCheck)
-        {
-            _isMatchStarted = false;
         }
     }
 
@@ -61,20 +53,25 @@ public class ServerPlayerSpawner : MonoBehaviour
 
         if (args.ConnectionState == RemoteConnectionState.Started)
         {
-            // Сохраняем подключение, но не спавним сразу
-            _pendingConnections[conn.ClientId] = conn;
-            Debug.Log($"[ServerPlayerSpawner] Player {conn.ClientId} connected, waiting for match start");
+            // Запоминаем для какого клиента какой индекс спавна
+            _playerSpawnIndex[conn.ClientId] = _nextSpawnIndex;
+            _nextSpawnIndex++;
+
+            if (GameManager.Instance != null &&
+                GameManager.Instance.CurrentState.Value == GameManager.GameState.InProgress)
+            {
+                SpawnPlayer(conn);
+            }
         }
         else if (args.ConnectionState == RemoteConnectionState.Stopped)
         {
-            _pendingConnections.Remove(conn.ClientId);
-            Debug.Log($"[ServerPlayerSpawner] Player {conn.ClientId} disconnected");
+            _playerSpawnIndex.Remove(conn.ClientId);
         }
     }
 
     private void SpawnAllPendingPlayers()
     {
-        foreach (var conn in _pendingConnections.Values)
+        foreach (var conn in InstanceFinder.ServerManager.Clients.Values)
         {
             SpawnPlayer(conn);
         }
@@ -82,44 +79,42 @@ public class ServerPlayerSpawner : MonoBehaviour
 
     private void SpawnPlayer(NetworkConnection ownerConnection)
     {
-        if (_playerPrefab == null)
-        {
-            Debug.LogError("[ServerPlayerSpawner] Player prefab is null!");
-            return;
-        }
+        if (_playerPrefab == null) return;
 
-        Vector3 spawnPosition = GetSpawnPosition(ownerConnection.ClientId);
+        Vector3 spawnPosition = GetSpawnPositionForClient(ownerConnection.ClientId);
         NetworkObject playerObject = Instantiate(_playerPrefab, spawnPosition, Quaternion.identity);
 
-        // Устанавливаем ник до спавна
         PlayerNetwork pn = playerObject.GetComponent<PlayerNetwork>();
         if (pn != null)
         {
             pn.SetNicknameServerRpc(ConnectionUI.PlayerNickname);
-            // Устанавливаем начальные значения
-            pn.HP.Value = 1; // 1 сердечко
-        }
-
-        // Сброс патронов
-        PlayerShooting ps = playerObject.GetComponent<PlayerShooting>();
-        if (ps != null)
-        {
-            ps.ResetAmmo();
+            pn.HP.Value = 1;
         }
 
         InstanceFinder.ServerManager.Spawn(playerObject.gameObject, ownerConnection);
-        Debug.Log($"[ServerPlayerSpawner] Spawned player for ClientId: {ownerConnection.ClientId}");
+        Debug.Log($"[ServerPlayerSpawner] Spawned player for client {ownerConnection.ClientId} at spawn point {_playerSpawnIndex[ownerConnection.ClientId]}");
     }
 
-    private Vector3 GetSpawnPosition(int clientId)
+    public Vector3 GetSpawnPositionForClient(int clientId)
     {
-        if (_spawnPoints != null && _spawnPoints.Length > 0)
+        if (_spawnPoints == null || _spawnPoints.Length == 0)
         {
-            // Разные точки для разных игроков
-            int index = clientId % _spawnPoints.Length;
-            return _spawnPoints[index].position;
+            Debug.LogError("[ServerPlayerSpawner] No spawn points assigned!");
+            return Vector3.zero;
         }
 
-        return new Vector3(0f, 1.5f, 0f);
+        int spawnIndex = 0;
+        if (_playerSpawnIndex.ContainsKey(clientId))
+        {
+            spawnIndex = _playerSpawnIndex[clientId] % _spawnPoints.Length;
+        }
+
+        return _spawnPoints[spawnIndex].position;
+    }
+
+    // Этот метод можно вызывать из PlayerNetwork при респавне
+    public Vector3 GetSpawnPointForPlayer(int clientId)
+    {
+        return GetSpawnPositionForClient(clientId);
     }
 }
