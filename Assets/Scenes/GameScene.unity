@@ -746,6 +746,7 @@ MonoBehaviour:
   - {fileID: 1146616091}
   - {fileID: 1602240603}
   _respawnDelay: 10
+  _maxTotalHearts: 12
 --- !u!1 &467935360
 GameObject:
   m_ObjectHideFlags: 0
