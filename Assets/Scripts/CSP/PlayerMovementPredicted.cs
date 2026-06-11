@@ -8,6 +8,7 @@ public class PlayerMovementPredicted : NetworkBehaviour
 {
     [SerializeField] private float _speed = 5f;
     [SerializeField] private float _gravity = -9.81f;
+    [SerializeField] private float _rotationSensitivity = 3f;
 
     private CharacterController _characterController;
     private PlayerInputHandler _inputHandler;
@@ -18,6 +19,19 @@ public class PlayerMovementPredicted : NetworkBehaviour
     {
         _characterController = GetComponent<CharacterController>();
         _inputHandler = GetComponent<PlayerInputHandler>();
+    }
+
+    private void Update()
+    {
+        if (!IsOwner) return;
+        if (_inputHandler == null) return;
+
+        PlayerNetwork playerNetwork = GetComponent<PlayerNetwork>();
+        if (playerNetwork != null && !playerNetwork.IsAlive.Value) return;
+
+        Vector2 mouseDelta = _inputHandler.MouseDelta;
+        float yaw = mouseDelta.x * _rotationSensitivity;
+        transform.Rotate(0f, yaw, 0f);
     }
 
     public override void OnStartNetwork()
@@ -104,7 +118,7 @@ public class PlayerMovementPredicted : NetworkBehaviour
         PlayerNetwork playerNetwork = GetComponent<PlayerNetwork>();
         if (playerNetwork != null && !playerNetwork.IsAlive.Value) return;
 
-        Vector3 move = new Vector3(md.Horizontal, 0f, md.Vertical).normalized * _speed;
+        Vector3 move = (transform.rotation * new Vector3(md.Horizontal, 0f, md.Vertical)).normalized * _speed;
 
         if (!_characterController.isGrounded)
         {

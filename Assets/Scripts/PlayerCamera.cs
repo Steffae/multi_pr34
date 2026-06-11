@@ -23,7 +23,8 @@ public class PlayerCamera : NetworkBehaviour
 
         if (_cam != null)
         {
-            _cam.transform.position = transform.position + _offset;
+            Vector3 rotatedOffset = transform.rotation * _offset;
+            _cam.transform.position = transform.position + rotatedOffset;
             _cam.transform.LookAt(transform.position);
         }
     }

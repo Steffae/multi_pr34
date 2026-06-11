@@ -7,8 +7,9 @@ public class PlayerInputHandler : MonoBehaviour
     private PlayerInputActions _inputActions;
 
     public event Action<Vector2> OnMoveInput;
-    public event Action OnAttackInput;
     public event Action OnShootInput;
+
+    public Vector2 MouseDelta => _inputActions?.Player.Look.ReadValue<Vector2>() ?? Vector2.zero;
 
     private void Awake()
     {
@@ -26,7 +27,6 @@ public class PlayerInputHandler : MonoBehaviour
 
         _inputActions.Player.Move.performed += OnMovePerformed;
         _inputActions.Player.Move.canceled += OnMoveCanceled;
-        _inputActions.Player.Attack.performed += OnAttackPerformed;
         _inputActions.Player.Shoot.performed += OnShootPerformed;
         _inputActions.Player.Enable();
 
@@ -39,7 +39,6 @@ public class PlayerInputHandler : MonoBehaviour
 
         _inputActions.Player.Move.performed -= OnMovePerformed;
         _inputActions.Player.Move.canceled -= OnMoveCanceled;
-        _inputActions.Player.Attack.performed -= OnAttackPerformed;
         _inputActions.Player.Shoot.performed -= OnShootPerformed;
         _inputActions.Player.Disable();
 
@@ -57,12 +56,6 @@ public class PlayerInputHandler : MonoBehaviour
     {
         //Debug.Log("[PlayerInputHandler] Move canceled");
         OnMoveInput?.Invoke(Vector2.zero);
-    }
-
-    private void OnAttackPerformed(InputAction.CallbackContext context)
-    {
-        //Debug.Log("[PlayerInputHandler] Attack performed");
-        OnAttackInput?.Invoke();
     }
 
     private void OnShootPerformed(InputAction.CallbackContext context)

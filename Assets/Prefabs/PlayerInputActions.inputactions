@@ -7,15 +7,6 @@
             "id": "1c58a9b6-4d73-4382-a84f-faa60af8726d",
             "actions": [
                 {
-                    "name": "Attack",
-                    "type": "Button",
-                    "id": "9d950594-e69a-4ece-a8db-b3b56922c32a",
-                    "expectedControlType": "",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
                     "name": "Move",
                     "type": "Value",
                     "id": "fc7d07b1-0c63-4bed-863a-499115ec6036",
@@ -32,20 +23,18 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "Look",
+                    "type": "Value",
+                    "id": "e7f8a9b0-1c2d-3e4f-5a6b-7c8d9e0f1a2b",
+                    "expectedControlType": "Vector2",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
                 }
             ],
             "bindings": [
-                {
-                    "name": "",
-                    "id": "0d66cc7d-f788-420b-932e-a849aef86bf1",
-                    "path": "<Keyboard>/space",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Attack",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
                 {
                     "name": "2D Vector",
                     "id": "82c563bc-87b5-4e6a-934a-c9f0c724fc59",
@@ -104,11 +93,22 @@
                 {
                     "name": "",
                     "id": "abb41f3d-dbf2-427e-a9f5-2585bcc3335d",
-                    "path": "<Keyboard>/q",
+                    "path": "<Keyboard>/space",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
                     "action": "Shoot",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e",
+                    "path": "<Mouse>/delta",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Look",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }
