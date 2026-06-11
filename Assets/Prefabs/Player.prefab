@@ -610,7 +610,7 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.8
+  m_Radius: 1
   m_Height: 2
   m_Direction: 1
   m_Center: {x: 0, y: 0, z: 0}
@@ -676,7 +676,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584204339854302407
+  _initializedTimestamp: -8584204289877442060
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
@@ -760,7 +760,7 @@ MonoBehaviour:
   _componentIndexCache: 2
   _addedNetworkObject: {fileID: 2156335736783277746}
   _networkObjectCache: {fileID: 2156335736783277746}
-  _speed: 7
+  _speed: 8
   _gravity: -9.81
   _rotationSensitivity: 3
 --- !u!114 &1151045578738634182
@@ -809,8 +809,8 @@ MonoBehaviour:
   _componentIndexCache: 4
   _addedNetworkObject: {fileID: 2156335736783277746}
   _networkObjectCache: {fileID: 2156335736783277746}
-  _offset: {x: 0, y: 4, z: -6}
-  _lookAheadDistance: 3
+  _offset: {x: 0, y: 6.8, z: -2.58}
+  _lookAheadDistance: 0
   audioListener: {fileID: 0}
 --- !u!114 &8861137697022031655
 MonoBehaviour:
