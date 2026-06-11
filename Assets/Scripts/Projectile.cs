@@ -7,6 +7,12 @@ public class Projectile : NetworkBehaviour
     [SerializeField] private float _lifetime = 5f;
 
     private bool _hasHit = false;
+    private PlayerNetwork _shooter;
+
+    public void Init(PlayerNetwork shooter)
+    {
+        _shooter = shooter;
+    }
 
     public override void OnStartNetwork()
     {
@@ -46,28 +52,18 @@ public class Projectile : NetworkBehaviour
         target.HP.Value = target.HP.Value - 1;
 
         // Добавляем сердечко стрелку
-        var shooter = GetShooterPlayer();
-        if (shooter != null && shooter.IsAlive.Value && shooter.HP.Value < 9)
+        Debug.Log($"[Projectile] shooter={(_shooter != null ? _shooter.Nickname.Value + " hp=" + _shooter.HP.Value : "NULL")}, target={target.Nickname.Value} hp={target.HP.Value}");
+        if (_shooter != null && _shooter.HP.Value < 9)
         {
-            shooter.HP.Value = shooter.HP.Value + 1;
-            Debug.Log($"[Server] {shooter.Nickname.Value} stole a heart from {target.Nickname.Value}! Now: shooter={shooter.HP.Value}, target={target.HP.Value}");
+            _shooter.HP.Value = _shooter.HP.Value + 1;
+            Debug.Log($"[Server] {_shooter.Nickname.Value} stole a heart from {target.Nickname.Value}! Now: shooter={_shooter.HP.Value}, target={target.HP.Value}");
+        }
+        else if (_shooter != null)
+        {
+            Debug.Log($"[Projectile] Shooter HP not < 9, not stealing. shooterHP={_shooter.HP.Value}");
         }
 
         DespawnProjectile();
-    }
-
-    private PlayerNetwork GetShooterPlayer()
-    {
-        if (OwnerId < 0) return null;
-
-        foreach (var nob in FishNet.InstanceFinder.ServerManager.Objects.Spawned.Values)
-        {
-            if (nob.OwnerId == OwnerId)
-            {
-                return nob.GetComponent<PlayerNetwork>();
-            }
-        }
-        return null;
     }
 
     private void DespawnProjectile()

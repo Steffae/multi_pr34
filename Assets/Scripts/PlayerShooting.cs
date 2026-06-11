@@ -71,6 +71,9 @@ public class PlayerShooting : NetworkBehaviour
 
         if (networkObject != null)
         {
+            Projectile proj = projectileObj.GetComponent<Projectile>();
+            if (proj != null)
+                proj.Init(_playerNetwork);
             base.Spawn(networkObject, base.Owner);
         }
         else

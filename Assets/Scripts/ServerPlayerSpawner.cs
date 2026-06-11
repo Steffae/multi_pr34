@@ -8,10 +8,19 @@ using UnityEngine;
 public class ServerPlayerSpawner : MonoBehaviour
 {
     [SerializeField] private NetworkObject _playerPrefab;
-    [SerializeField] private Transform[] _spawnPoints;  // Точки спавна (2 штуки)
+    [SerializeField] private Transform[] _spawnPoints;
 
     private Dictionary<int, int> _playerSpawnIndex = new Dictionary<int, int>();
     private int _nextSpawnIndex = 0;
+
+    private static ServerPlayerSpawner _instance;
+    public static ServerPlayerSpawner Instance => _instance;
+
+    private void Awake()
+    {
+        if (_instance == null)
+            _instance = this;
+    }
 
     private void Start()
     {
@@ -80,6 +89,16 @@ public class ServerPlayerSpawner : MonoBehaviour
     private void SpawnPlayer(NetworkConnection ownerConnection)
     {
         if (_playerPrefab == null) return;
+
+        // Не создаём дубликат — проверяем, есть ли уже игрок у этого клиента
+        foreach (var nob in ownerConnection.Objects)
+        {
+            if (nob.GetComponent<PlayerNetwork>() != null)
+            {
+                Debug.Log($"[ServerPlayerSpawner] Player already exists for client {ownerConnection.ClientId}, skipping spawn");
+                return;
+            }
+        }
 
         Vector3 spawnPosition = GetSpawnPositionForClient(ownerConnection.ClientId);
         NetworkObject playerObject = Instantiate(_playerPrefab, spawnPosition, Quaternion.identity);

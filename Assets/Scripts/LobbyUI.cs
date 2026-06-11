@@ -27,6 +27,7 @@ public class LobbyUI : MonoBehaviour
     [SerializeField] private TMP_Text _matchTimerText;
 
     private bool _isReady = false;
+    private bool _individualRematch = false;
     private ConnectionUI _connectionUI;
 
     private static LobbyUI _instance;
@@ -40,9 +41,14 @@ public class LobbyUI : MonoBehaviour
 
     public void ShowResultsWithWinner(string winnerText)
     {
+        if (_resultsPanel != null) _resultsPanel.SetActive(true);
+        if (_lobbyPanel != null) _lobbyPanel.SetActive(false);
+        if (_countdownPanel != null) _countdownPanel.SetActive(false);
+        if (_gameplayHUD != null) _gameplayHUD.SetActive(false);
+
         if (_resultsText != null)
         {
-            _resultsText.text = $"Match Over!\n{winnerText}";
+            _resultsText.text = winnerText;
         }
     }
 
@@ -83,6 +89,7 @@ public class LobbyUI : MonoBehaviour
 
     private void OnGameStateChanged(GameManager.GameState newState)
     {
+        _individualRematch = false;
         switch (newState)
         {
             case GameManager.GameState.WaitingForPlayers:
@@ -144,9 +151,10 @@ public class LobbyUI : MonoBehaviour
         if (GameManager.Instance == null) return;
 
         bool isReadyCheck = (GameManager.Instance.CurrentState.Value == GameManager.GameState.ReadyCheck);
-        bool canBeReady = (GameManager.Instance.ConnectedPlayers.Value >= 2);
+        bool canReady = _individualRematch || isReadyCheck;
+        bool hasPlayers = (GameManager.Instance.ConnectedPlayers.Value >= 2);
 
-        _readyButton.interactable = isReadyCheck && canBeReady;
+        _readyButton.interactable = canReady && hasPlayers;
 
         // Меняем цвет кнопки при нажатии
         if (_isReady && _readyButton.interactable)
@@ -207,8 +215,11 @@ public class LobbyUI : MonoBehaviour
 
     private void OnRematchPressed()
     {
-        // Просто выходим в меню, как и кнопка Exit
-        OnBackToMenuPressed();
+        if (GameManager.Instance != null)
+        {
+            int myClientId = FishNet.InstanceFinder.ClientManager.Connection.ClientId;
+            GameManager.Instance.RequestRestartServerRpc(myClientId);
+        }
     }
 
     private void OnExitAfterMatchPressed()
@@ -230,7 +241,13 @@ public class LobbyUI : MonoBehaviour
         UpdateLobbyStatus();
     }
 
-    private void ShowReadyCheck()
+    public void ShowLobbyFromRematch()
+    {
+        _individualRematch = true;
+        ShowReadyCheck();
+    }
+
+    public void ShowReadyCheck()
     {
         if (_lobbyPanel != null) _lobbyPanel.SetActive(true);
         if (_countdownPanel != null) _countdownPanel.SetActive(false);
@@ -243,7 +260,8 @@ public class LobbyUI : MonoBehaviour
 
         if (_lobbyReadyText != null && GameManager.Instance != null)
         {
-            _lobbyReadyText.text = $"Ready: {GameManager.Instance.PlayersReadyCount.Value}/{GameManager.Instance.ConnectedPlayers.Value}";
+            int connected = GameManager.Instance.ConnectedPlayers.Value;
+            _lobbyReadyText.text = $"Ready: 0/{connected}";
         }
 
         // Сбрасываем состояние готовности при входе в ReadyCheck
@@ -274,10 +292,7 @@ public class LobbyUI : MonoBehaviour
         if (_gameplayHUD != null) _gameplayHUD.SetActive(false);
         if (_resultsPanel != null) _resultsPanel.SetActive(true);
 
-        if (_resultsText != null)
-        {
-            _resultsText.text = "Match Over!\nCheck your hearts count...";
-        }
+        // Текст уже установлен через ShowResultsObserversRpc
     }
 
     private void ShowMenu()
@@ -287,4 +302,5 @@ public class LobbyUI : MonoBehaviour
         if (_gameplayHUD != null) _gameplayHUD.SetActive(false);
         if (_resultsPanel != null) _resultsPanel.SetActive(false);
     }
+
 }

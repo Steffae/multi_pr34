@@ -3,7 +3,6 @@ using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using FishNet.Transporting;
-using FishNet.Serializing;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -11,7 +10,7 @@ public class GameManager : NetworkBehaviour
 {
     [Header("Game Settings")]
     [SerializeField] private int _requiredPlayers = 2;
-    [SerializeField] private float _matchDuration = 300f; // 5 минут = 300 секунд
+    [SerializeField] private float _matchDuration = 300f;
     [SerializeField] private float _resultShowDuration = 5f;
     [SerializeField] private float _countdownDuration = 5f;
 
@@ -20,25 +19,19 @@ public class GameManager : NetworkBehaviour
     public readonly SyncVar<int> ConnectedPlayers = new SyncVar<int>(0);
     public readonly SyncVar<float> MatchTimer = new SyncVar<float>(0f);
     public readonly SyncVar<float> CountdownTimer = new SyncVar<float>(0f);
-
-    // Синхронизация готовности игроков (словарь ClientId → IsReady)
-    private Dictionary<int, bool> _playerReadyStatus = new Dictionary<int, bool>();
     public readonly SyncVar<int> PlayersReadyCount = new SyncVar<int>(0);
-
-    public int GetPlayersReadyCount() => PlayersReadyCount.Value;
 
     public enum GameState
     {
-        WaitingForPlayers,  // Ждём игроков (лобби)
-        ReadyCheck,         // Оба игрока есть, ждём нажатия "Готов"
-        Countdown,          // Оба готовы, идёт обратный отсчёт
-        InProgress,         // Матч идёт
-        ShowingResults      // Показываем результаты
+        WaitingForPlayers,
+        ReadyCheck,
+        Countdown,
+        InProgress,
+        ShowingResults
     }
 
     public static GameManager Instance { get; private set; }
 
-    // События для UI
     public delegate void GameStateChangedHandler(GameState newState);
     public static event GameStateChangedHandler OnLocalGameStateChanged;
 
@@ -54,6 +47,8 @@ public class GameManager : NetworkBehaviour
     public delegate void CountdownTimerChangedHandler(float time);
     public static event CountdownTimerChangedHandler OnLocalCountdownTimerChanged;
 
+    private Dictionary<int, bool> _playerReadyStatus = new Dictionary<int, bool>();
+    private Dictionary<int, bool> _rematchVotes = new Dictionary<int, bool>();
     private bool _countdownInProgress = false;
 
     private void Awake()
@@ -94,6 +89,7 @@ public class GameManager : NetworkBehaviour
         ConnectedPlayers.OnChange -= OnConnectedPlayersChanged;
         MatchTimer.OnChange -= OnMatchTimerChanged;
         CountdownTimer.OnChange -= OnCountdownTimerChanged;
+        PlayersReadyCount.OnChange -= OnPlayersReadyCountChanged;
 
         if (base.IsServerInitialized)
         {
@@ -118,11 +114,9 @@ public class GameManager : NetworkBehaviour
             Debug.Log($"[GameManager] Player connected. ClientId={conn.ClientId}");
             UpdateConnectedPlayersCount();
 
-            // Новый игрок подключается — он не готов
             _playerReadyStatus[conn.ClientId] = false;
             UpdateReadyCount();
 
-            // Проверяем, нужно ли перейти в режим ожидания готовности
             if (CurrentState.Value == GameState.WaitingForPlayers && ConnectedPlayers.Value >= _requiredPlayers)
             {
                 CurrentState.Value = GameState.ReadyCheck;
@@ -133,11 +127,9 @@ public class GameManager : NetworkBehaviour
         {
             Debug.Log($"[GameManager] Player disconnected. ClientId={conn.ClientId}");
 
-            // Удаляем игрока из словаря готовности
             _playerReadyStatus.Remove(conn.ClientId);
             UpdateReadyCount();
 
-            // Отложенное обновление счётчика
             StartCoroutine(DelayedUpdatePlayersCount());
         }
     }
@@ -148,11 +140,9 @@ public class GameManager : NetworkBehaviour
         UpdateConnectedPlayersCount();
         Debug.Log($"[GameManager] Delayed update. Players now: {ConnectedPlayers.Value}/{_requiredPlayers}");
 
-        // Если игроков снова меньше требуемого — возвращаемся в ожидание
         if (ConnectedPlayers.Value < _requiredPlayers)
         {
-            if (CurrentState.Value == GameState.ReadyCheck ||
-                CurrentState.Value == GameState.Countdown)
+            if (CurrentState.Value == GameState.ReadyCheck || CurrentState.Value == GameState.Countdown)
             {
                 Debug.Log("[GameManager] Not enough players! Returning to waiting state...");
                 ResetReadyStatus();
@@ -184,11 +174,34 @@ public class GameManager : NetworkBehaviour
 
         Debug.Log($"[GameManager] Player {clientId} ready status: {isReady}. Ready count: {PlayersReadyCount.Value}/{_playerReadyStatus.Count}");
 
+        // Во время показа результатов — учитываем голоса за рематч
+        if (CurrentState.Value == GameState.ShowingResults)
+        {
+            if (AllPlayersRematched() && AllPlayersReady())
+            {
+                Debug.Log("[GameManager] All players rematched and ready! Starting match...");
+                _rematchVotes.Clear();
+                ResetReadyStatus();
+                StartCountdown();
+            }
+            return;
+        }
+
         if (CurrentState.Value == GameState.ReadyCheck && AllPlayersReady())
         {
             Debug.Log("[GameManager] All players ready! Starting countdown...");
             StartCountdown();
         }
+    }
+
+    private bool AllPlayersRematched()
+    {
+        foreach (var conn in base.ServerManager.Clients.Values)
+        {
+            if (!_rematchVotes.ContainsKey(conn.ClientId) || !_rematchVotes[conn.ClientId])
+                return false;
+        }
+        return _rematchVotes.Count > 0;
     }
 
     private void UpdateReadyCount()
@@ -201,9 +214,6 @@ public class GameManager : NetworkBehaviour
         PlayersReadyCount.Value = ready;
 
         Debug.Log($"[GameManager] UpdateReadyCount: {ready} ready out of {_playerReadyStatus.Count} players");
-
-        // Оповещаем UI
-        OnLocalPlayersReadyChanged?.Invoke(ready, _playerReadyStatus.Count);
     }
 
     private bool AllPlayersReady()
@@ -231,7 +241,6 @@ public class GameManager : NetworkBehaviour
     {
         _playerReadyStatus.Clear();
 
-        // Перезаполняем для всех текущих игроков
         foreach (var conn in base.ServerManager.Clients.Values)
         {
             _playerReadyStatus[conn.ClientId] = false;
@@ -270,10 +279,108 @@ public class GameManager : NetworkBehaviour
                 PlayerNetwork pn = nob.GetComponent<PlayerNetwork>();
                 if (pn != null)
                 {
-                    //pn.ResetForMatch();
+                    pn.ResetForMatch();
                     Debug.Log($"[GameManager] Reset player {pn.Nickname.Value}");
                 }
             }
+        }
+    }
+
+    private void CheckWinCondition()
+    {
+        foreach (var conn in base.ServerManager.Clients.Values)
+        {
+            foreach (var nob in conn.Objects)
+            {
+                PlayerNetwork pn = nob.GetComponent<PlayerNetwork>();
+                if (pn != null && pn.IsAlive.Value && pn.HP.Value >= 9)
+                {
+                    EndMatchWithWinner(pn.OwnerId, pn.Nickname.Value);
+                    return;
+                }
+            }
+        }
+    }
+
+    private void EndMatchWithWinner(int winnerClientId, string winnerName)
+    {
+        CurrentState.Value = GameState.ShowingResults;
+        ShowResultsObserversRpc(winnerName, winnerClientId);
+        Debug.Log($"[GameManager] Match ended! Winner: {winnerName} (client {winnerClientId})");
+    }
+
+    private void EndMatch()
+    {
+        CurrentState.Value = GameState.ShowingResults;
+        ShowResultsObserversRpc("", -1);
+        Debug.Log("[GameManager] Match ended! Time's up!");
+    }
+
+    [ObserversRpc]
+    private void ShowResultsObserversRpc(string winnerName, int winnerClientId)
+    {
+        if (LobbyUI.Instance != null)
+        {
+            int myId = FishNet.InstanceFinder.ClientManager.Connection.ClientId;
+            string resultText;
+            if (winnerClientId < 0)
+                resultText = "Ничья!\nНикто не набрал 9 сердечек";
+            else if (winnerClientId == myId)
+                resultText = $"Вы победитель!\n{winnerName} набрал 9 сердечек!";
+            else
+                resultText = $"Вы проиграли!\n{winnerName} набрал 9 сердечек!";
+
+            LobbyUI.Instance.ShowResultsWithWinner(resultText);
+        }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestRestartServerRpc(int clientId)
+    {
+        if (!IsServerInitialized) return;
+        if (CurrentState.Value != GameState.ShowingResults) return;
+
+        if (_rematchVotes.ContainsKey(clientId) && _rematchVotes[clientId])
+            return;
+
+        _rematchVotes[clientId] = true;
+        Debug.Log($"[GameManager] Player {clientId} voted for rematch");
+
+        // Сбрасываем готовность, чтобы лобби показывало 0/2
+        ResetReadyStatus();
+
+        // Переводим этого игрока в лобби индивидуально
+        if (base.ServerManager.Clients.TryGetValue(clientId, out var conn))
+        {
+            ShowRematchLobbyTargetRpc(conn);
+        }
+
+        // Если все проголосовали — общий переход в ReadyCheck
+        bool allVoted = true;
+        foreach (var c in base.ServerManager.Clients.Values)
+        {
+            if (!_rematchVotes.ContainsKey(c.ClientId) || !_rematchVotes[c.ClientId])
+            {
+                allVoted = false;
+                break;
+            }
+        }
+
+        if (allVoted)
+        {
+            Debug.Log("[GameManager] All players rematched!");
+            _rematchVotes.Clear();
+            ResetReadyStatus();
+            CurrentState.Value = GameState.ReadyCheck;
+        }
+    }
+
+    [TargetRpc]
+    private void ShowRematchLobbyTargetRpc(NetworkConnection target)
+    {
+        if (LobbyUI.Instance != null)
+        {
+            LobbyUI.Instance.ShowLobbyFromRematch();
         }
     }
 
@@ -293,6 +400,9 @@ public class GameManager : NetworkBehaviour
         else if (CurrentState.Value == GameState.InProgress)
         {
             MatchTimer.Value -= Time.deltaTime;
+
+            CheckWinCondition();
+
             if (MatchTimer.Value <= 0f)
             {
                 MatchTimer.Value = 0f;
@@ -301,13 +411,6 @@ public class GameManager : NetworkBehaviour
         }
     }
 
-    private void EndMatch()
-    {
-        CurrentState.Value = GameState.ShowingResults;
-        Debug.Log("[GameManager] Match ended!");
-    }
-
-    // События для UI
     private void OnGameStateChanged(GameState oldValue, GameState newValue, bool asServer)
     {
         Debug.Log($"[GameManager] GameState: {oldValue} -> {newValue}");

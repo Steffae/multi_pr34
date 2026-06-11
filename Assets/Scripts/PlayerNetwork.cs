@@ -14,36 +14,9 @@ public class PlayerNetwork : NetworkBehaviour
 
     private bool _nicknameSent = false;
 
-    private static Vector3[] _cachedSpawnPoints;
-    private static bool _spawnPointsCached = false;
-
-    private void CacheSpawnPoints()
-    {
-        if (_spawnPointsCached) return;
-
-        GameObject[] spawnObjects = GameObject.FindGameObjectsWithTag("SpawnPoint");
-        if (spawnObjects.Length > 0)
-        {
-            _cachedSpawnPoints = new Vector3[spawnObjects.Length];
-            for (int i = 0; i < spawnObjects.Length; i++)
-            {
-                _cachedSpawnPoints[i] = spawnObjects[i].transform.position;
-                Debug.Log($"[PlayerNetwork] Cached spawn point {i}: {_cachedSpawnPoints[i]}");
-            }
-            _spawnPointsCached = true;
-        }
-        else
-        {
-            Debug.LogWarning("[PlayerNetwork] No spawn points found with tag 'SpawnPoint'");
-            _cachedSpawnPoints = new Vector3[0];
-        }
-    }
-
     public override void OnStartNetwork()
     {
         base.OnStartNetwork();
-
-        CacheSpawnPoints();
 
         Nickname.OnChange += OnNicknameChanged;
         HP.OnChange += OnHpChanged;
@@ -99,7 +72,7 @@ public class PlayerNetwork : NetworkBehaviour
 
         HideModelObserversRpc(true);
 
-        TeleportToCachedSpawnPoint();
+        TeleportToSpawnPoint();
 
         // Сброс патронов
         PlayerShooting shooting = GetComponent<PlayerShooting>();
@@ -117,14 +90,14 @@ public class PlayerNetwork : NetworkBehaviour
         Debug.Log($"[PlayerNetwork] RespawnRoutine END for {Nickname.Value} at {transform.position}");
     }
 
-    private void TeleportToCachedSpawnPoint()
+    private void TeleportToSpawnPoint()
     {
         Vector3 targetPos;
-        if (_cachedSpawnPoints != null && _cachedSpawnPoints.Length > 0)
+
+        if (ServerPlayerSpawner.Instance != null)
         {
-            int idx = Random.Range(0, _cachedSpawnPoints.Length);
-            targetPos = _cachedSpawnPoints[idx];
-            Debug.Log($"[PlayerNetwork] {Nickname.Value} teleported to cached spawn point {idx}: {targetPos}");
+            targetPos = ServerPlayerSpawner.Instance.GetSpawnPositionForClient(OwnerId);
+            Debug.Log($"[PlayerNetwork] {Nickname.Value} teleported to spawn point for client {OwnerId}: {targetPos}");
         }
         else
         {
@@ -192,6 +165,13 @@ public class PlayerNetwork : NetworkBehaviour
             shooting.ResetAmmo();
         }
 
-        TeleportToCachedSpawnPoint();
+        // Сбрасываем движение, чтобы игрока не выбрасывало после телепорта
+        var movement = GetComponent<PlayerMovementPredicted>();
+        if (movement != null)
+        {
+            movement.ResetState();
+        }
+
+        TeleportToSpawnPoint();
     }
 }

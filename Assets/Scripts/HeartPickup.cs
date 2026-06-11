@@ -1,9 +1,10 @@
+using FishNet;
 using FishNet.Object;
 using UnityEngine;
 
 public class HeartPickup : NetworkBehaviour
 {
-    [SerializeField] private int _healAmount = 1;  // +1 сердечко
+    [SerializeField] private int _healAmount = 1;
 
     private PickupManager _manager;
     private Vector3 _spawnPosition;
@@ -16,7 +17,6 @@ public class HeartPickup : NetworkBehaviour
 
     private void Update()
     {
-        // Вращение для красоты
         transform.Rotate(Vector3.up, 90f * Time.deltaTime);
     }
 
@@ -28,9 +28,14 @@ public class HeartPickup : NetworkBehaviour
         if (player == null) return;
 
         if (!player.IsAlive.Value) return;
-
-        // Не больше 9 сердечек
         if (player.HP.Value >= 9) return;
+
+        // Суммарно не больше 9 (игроки + активные сердца на поле)
+        if (PickupManager.Instance != null && !PickupManager.Instance.CanPickupHeart())
+        {
+            Debug.Log("[HeartPickup] Total hearts cap reached, can't pick up");
+            return;
+        }
 
         player.HP.Value = Mathf.Min(9, player.HP.Value + _healAmount);
 

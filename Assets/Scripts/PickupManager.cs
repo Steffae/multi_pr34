@@ -6,6 +6,15 @@ using UnityEngine;
 
 public class PickupManager : MonoBehaviour
 {
+    private static PickupManager _instance;
+    public static PickupManager Instance => _instance;
+
+    private void Awake()
+    {
+        if (_instance == null)
+            _instance = this;
+    }
+
     [Header("Pickup Prefabs")]
     [SerializeField] private GameObject _heartPickupPrefab;
     [SerializeField] private GameObject _ammoPickupPrefab;
@@ -16,9 +25,12 @@ public class PickupManager : MonoBehaviour
 
     [Header("Settings")]
     [SerializeField] private float _respawnDelay = 10f;
+    [SerializeField] private int _maxTotalHearts = 12;
 
     private Dictionary<Vector3, bool> _heartSpawnStatus = new Dictionary<Vector3, bool>();
     private Dictionary<Vector3, bool> _ammoSpawnStatus = new Dictionary<Vector3, bool>();
+    private int _activeHeartCount = 0;
+    private static bool _hasSpawnedPickups = false;
 
     private void Start()
     {
@@ -27,9 +39,9 @@ public class PickupManager : MonoBehaviour
             InstanceFinder.ServerManager.OnServerConnectionState += OnServerConnectionState;
         }
 
-        if (InstanceFinder.ServerManager != null && InstanceFinder.ServerManager.Started)
+        if (GameManager.Instance != null)
         {
-            SpawnAll();
+            GameManager.OnLocalGameStateChanged += OnGameStateChanged;
         }
     }
 
@@ -39,12 +51,28 @@ public class PickupManager : MonoBehaviour
         {
             InstanceFinder.ServerManager.OnServerConnectionState -= OnServerConnectionState;
         }
+
+        if (GameManager.Instance != null)
+        {
+            GameManager.OnLocalGameStateChanged -= OnGameStateChanged;
+        }
+    }
+
+    private void OnGameStateChanged(GameManager.GameState newState)
+    {
+        if (newState == GameManager.GameState.Countdown &&
+            InstanceFinder.ServerManager != null &&
+            InstanceFinder.ServerManager.Started)
+        {
+            ResetAllHearts();
+        }
     }
 
     private void OnServerConnectionState(FishNet.Transporting.ServerConnectionStateArgs args)
     {
-        if (args.ConnectionState == FishNet.Transporting.LocalConnectionState.Started)
+        if (args.ConnectionState == FishNet.Transporting.LocalConnectionState.Started && !_hasSpawnedPickups)
         {
+            _hasSpawnedPickups = true;
             Debug.Log("[PickupManager] Server started - spawning pickups");
             SpawnAll();
         }
@@ -95,6 +123,7 @@ public class PickupManager : MonoBehaviour
     public void OnHeartPickedUp(Vector3 position)
     {
         _heartSpawnStatus[position] = false;
+        _activeHeartCount--;
         StartCoroutine(RespawnHeartAfterDelay(position));
     }
 
@@ -104,11 +133,64 @@ public class PickupManager : MonoBehaviour
         StartCoroutine(RespawnAmmoAfterDelay(position));
     }
 
+    private int GetTotalHearts()
+    {
+        int hpTotal = 0;
+        foreach (var nob in InstanceFinder.ServerManager.Objects.Spawned.Values)
+        {
+            var pn = nob.GetComponent<PlayerNetwork>();
+            if (pn != null)
+                hpTotal += pn.HP.Value;
+        }
+        return hpTotal + _activeHeartCount;
+    }
+
+    public void ResetAllHearts()
+    {
+        StopAllCoroutines();
+
+        // Деспавним все активные пикапы на поле
+        List<NetworkObject> toDespawn = new List<NetworkObject>();
+        foreach (var nob in InstanceFinder.ServerManager.Objects.Spawned.Values)
+        {
+            if (nob.GetComponent<HeartPickup>() != null || nob.GetComponent<AmmoPickup>() != null)
+                toDespawn.Add(nob);
+        }
+        foreach (var nob in toDespawn)
+        {
+            InstanceFinder.ServerManager.Despawn(nob);
+        }
+
+        _activeHeartCount = 0;
+        _heartSpawnStatus.Clear();
+        _ammoSpawnStatus.Clear();
+
+        // Спавним заново с учётом нового капа
+        SpawnAllHearts();
+        SpawnAllAmmo();
+        Debug.Log($"[PickupManager] Reset all pickups for new match");
+    }
+
+    public bool CanPickupHeart()
+    {
+        return GetTotalHearts() <= _maxTotalHearts;
+    }
+
+    private bool CanSpawnHeart()
+    {
+        return GetTotalHearts() < _maxTotalHearts;
+    }
+
     private IEnumerator RespawnHeartAfterDelay(Vector3 position)
     {
         yield return new WaitForSeconds(_respawnDelay);
         if (!_heartSpawnStatus[position])
         {
+            if (!CanSpawnHeart())
+            {
+                Debug.Log($"[PickupManager] Total hearts already {_maxTotalHearts}, skipping heart respawn");
+                yield break;
+            }
             _heartSpawnStatus[position] = true;
             SpawnHeart(position);
         }
@@ -132,6 +214,12 @@ public class PickupManager : MonoBehaviour
             return;
         }
 
+        if (!CanSpawnHeart())
+        {
+            Debug.Log($"[PickupManager] Total hearts cap ({_maxTotalHearts}) reached, not spawning heart");
+            return;
+        }
+
         GameObject go = Instantiate(_heartPickupPrefab, position, Quaternion.identity);
 
         HeartPickup pickup = go.GetComponent<HeartPickup>();
@@ -144,7 +232,8 @@ public class PickupManager : MonoBehaviour
         if (networkObject != null)
         {
             InstanceFinder.ServerManager.Spawn(networkObject);
-            Debug.Log($"[PickupManager] Spawned heart at {position}");
+            _activeHeartCount++;
+            Debug.Log($"[PickupManager] Spawned heart at {position}. Active hearts: {_activeHeartCount}");
         }
     }
 
