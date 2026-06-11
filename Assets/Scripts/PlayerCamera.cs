@@ -3,7 +3,8 @@ using UnityEngine;
 
 public class PlayerCamera : NetworkBehaviour
 {
-    [SerializeField] private Vector3 _offset = new(0f, 4.5f, -6f);
+    [SerializeField] private Vector3 _offset = new(0f, 5.5f, -4f);
+    [SerializeField] private float _lookAheadDistance = 3f;
     [SerializeField] private AudioListener audioListener;
 
     private Camera _cam;
@@ -25,7 +26,7 @@ public class PlayerCamera : NetworkBehaviour
         {
             Vector3 rotatedOffset = transform.rotation * _offset;
             _cam.transform.position = transform.position + rotatedOffset;
-            _cam.transform.LookAt(transform.position);
+            _cam.transform.LookAt(transform.position + transform.forward * _lookAheadDistance);
         }
     }
 

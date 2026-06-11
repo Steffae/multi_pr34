@@ -114,7 +114,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 2}
+  m_AnchoredPosition: {x: 0, y: 2.59}
   m_SizeDelta: {x: 200, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!223 &8087170606933829255
@@ -525,7 +525,7 @@ Transform:
   m_GameObject: {fileID: 5332833827901396125}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.1, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -610,7 +610,7 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.5
+  m_Radius: 0.8
   m_Height: 2
   m_Direction: 1
   m_Center: {x: 0, y: 0, z: 0}
@@ -676,7 +676,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584204720499396046
+  _initializedTimestamp: -8584204339854302407
   _localLevelOfDetailCalculationType: 0
   _useLevelOfDetail: 0
   _useRootLevelOfDetail: 1
@@ -700,7 +700,7 @@ MonoBehaviour:
   <AssetPathHash>k__BackingField: 2092870565765373345
   SceneId: 0
   SerializedTransformProperties:
-    Position: {x: 0, y: 1.1, z: 0}
+    Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     Scale: {x: 1, y: 1, z: 1}
     IsValid: 1
@@ -721,6 +721,13 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 2156335736783277746}
   pinkMat: {fileID: 2100000, guid: 5f0d4440135b7624ba0e74db298e0600, type: 2}
   canvas: {fileID: 2029326852535769089}
+  _skinData:
+  - prefab: {fileID: 510149185953847053, guid: 2f853cf0d3e81e549baf3a04375706da, type: 3}
+    offset: {x: 0, y: -1, z: 0}
+  - prefab: {fileID: 4364035967800901705, guid: 22932269a625d7c4d986a5046aefc89d, type: 3}
+    offset: {x: 0.32, y: -1, z: 0}
+  - prefab: {fileID: 6779404418849021365, guid: 01542719396a28d4ca3325f3ba7ff6bd, type: 3}
+    offset: {x: 2.38, y: -1, z: 0}
 --- !u!114 &6181971696817345066
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -755,6 +762,7 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 2156335736783277746}
   _speed: 7
   _gravity: -9.81
+  _rotationSensitivity: 3
 --- !u!114 &1151045578738634182
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -802,6 +810,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 2156335736783277746}
   _networkObjectCache: {fileID: 2156335736783277746}
   _offset: {x: 0, y: 4, z: -6}
+  _lookAheadDistance: 3
   audioListener: {fileID: 0}
 --- !u!114 &8861137697022031655
 MonoBehaviour:

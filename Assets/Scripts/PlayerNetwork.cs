@@ -3,34 +3,72 @@ using FishNet.Object.Synchronizing;
 using UnityEngine;
 using System.Collections;
 
+[System.Serializable]
+public class SkinData
+{
+    public GameObject prefab;
+    public Vector3 offset;
+}
+
 public class PlayerNetwork : NetworkBehaviour
 {
     [SerializeField] private Material pinkMat;
     [SerializeField] private GameObject canvas;
+    [SerializeField] private SkinData[] _skinData;
 
     public readonly SyncVar<string> Nickname = new SyncVar<string>("Player");
     public readonly SyncVar<int> HP = new SyncVar<int>(1);
     public readonly SyncVar<bool> IsAlive = new SyncVar<bool>(true);
+    public readonly SyncVar<int> SelectedSkin = new SyncVar<int>(0);
 
     private bool _nicknameSent = false;
+    private bool _skinSent = false;
+    private GameObject _activeSkinInstance;
+
+    public static PlayerNetwork LocalInstance { get; private set; }
+    public static int PendingSkinIndex = -1;
 
     public override void OnStartNetwork()
     {
         base.OnStartNetwork();
+
+        if (base.Owner.IsLocalClient)
+            LocalInstance = this;
 
         Nickname.OnChange += OnNicknameChanged;
         HP.OnChange += OnHpChanged;
         IsAlive.OnChange += OnIsAliveChanged;
 
         SetPlayerColor(true);
+
+        int initialSkin = SelectedSkin.Value;
+        if (base.Owner.IsLocalClient && PendingSkinIndex >= 0)
+            initialSkin = PendingSkinIndex;
+        ApplySkin(initialSkin);
+    }
+
+    private void OnDestroy()
+    {
+        if (_activeSkinInstance != null)
+            Destroy(_activeSkinInstance);
     }
 
     private void Update()
     {
-        if (!_nicknameSent && IsOwner && IsClientInitialized)
+        if (!IsOwner || !IsClientInitialized) return;
+
+        if (!_nicknameSent)
         {
             _nicknameSent = true;
             SetNicknameServerRpc(ConnectionUI.PlayerNickname);
+        }
+
+        if (!_skinSent && PendingSkinIndex >= 0)
+        {
+            _skinSent = true;
+            int idx = PendingSkinIndex;
+            PendingSkinIndex = -1;
+            SetSkinServerRpc(idx);
         }
     }
 
@@ -48,6 +86,47 @@ public class PlayerNetwork : NetworkBehaviour
         Nickname.Value = string.IsNullOrWhiteSpace(nickname)
             ? $"Player_{OwnerId}"
             : nickname.Trim();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void SetSkinServerRpc(int skinIndex)
+    {
+        int clamped = Mathf.Clamp(skinIndex, 0, 2);
+        Debug.Log($"[PlayerNetwork] SetSkinServerRpc owner={OwnerId} index={clamped}");
+        SelectedSkin.Value = clamped;
+        ApplySkinObserversRpc(clamped);
+    }
+
+    [ObserversRpc]
+    private void ApplySkinObserversRpc(int skinIndex)
+    {
+        Debug.Log($"[PlayerNetwork] ApplySkinObserversRpc owner={OwnerId} index={skinIndex}");
+        ApplySkin(skinIndex);
+    }
+
+    private void ApplySkin(int skinIndex)
+    {
+        Debug.Log($"[PlayerNetwork] ApplySkin owner={OwnerId} index={skinIndex} data={_skinData?.Length}");
+        if (_activeSkinInstance != null)
+        {
+            Destroy(_activeSkinInstance);
+            _activeSkinInstance = null;
+        }
+
+        if (skinIndex < 0 || _skinData == null || skinIndex >= _skinData.Length || _skinData[skinIndex].prefab == null)
+        {
+            Debug.LogWarning($"[PlayerNetwork] ApplySkin FAILED: idx={skinIndex} data=null:{_skinData == null} len={(_skinData != null ? _skinData.Length : 0)}");
+            return;
+        }
+
+        SkinData data = _skinData[skinIndex];
+        _activeSkinInstance = Instantiate(data.prefab, transform);
+        _activeSkinInstance.transform.localPosition = data.offset;
+        _activeSkinInstance.transform.localRotation = Quaternion.identity;
+
+        Renderer capsuleRenderer = GetComponent<Renderer>();
+        if (capsuleRenderer != null)
+            capsuleRenderer.enabled = false;
     }
 
     private void OnNicknameChanged(string oldValue, string newValue, bool asServer) { }
@@ -133,7 +212,9 @@ public class PlayerNetwork : NetworkBehaviour
     private void HideModelObserversRpc(bool hide)
     {
         Renderer renderer = GetComponent<Renderer>();
-        if (renderer != null) renderer.enabled = !hide;
+        if (renderer != null && renderer.enabled) renderer.enabled = !hide;
+        if (_activeSkinInstance != null)
+            _activeSkinInstance.SetActive(!hide);
         if (canvas != null) canvas.SetActive(!hide);
     }
 

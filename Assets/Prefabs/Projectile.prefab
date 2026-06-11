@@ -70,7 +70,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 2125c99c042a0fe448a0a1886c83f8e5, type: 2}
+  - {fileID: 2100000, guid: 987f95e134b6b4847ba9d401dc192848, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -215,5 +215,4 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 3290163855365556455}
   _networkObjectCache: {fileID: 0}
   _speed: 18
-  _damage: 20
   _lifetime: 5

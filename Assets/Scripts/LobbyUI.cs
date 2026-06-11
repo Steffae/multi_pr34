@@ -3,6 +3,12 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+[System.Serializable]
+public class SkinOption
+{
+    public Button button;
+}
+
 public class LobbyUI : MonoBehaviour
 {
     [Header("Lobby Panel")]
@@ -11,6 +17,9 @@ public class LobbyUI : MonoBehaviour
     [SerializeField] private TMP_Text _lobbyReadyText;
     [SerializeField] private Button _readyButton;
     [SerializeField] private Button _backToMenuButton;
+
+    [Header("Skin Selection")]
+    [SerializeField] private SkinOption[] _skinOptions;
 
     [Header("Countdown")]
     [SerializeField] private GameObject _countdownPanel;
@@ -73,6 +82,15 @@ public class LobbyUI : MonoBehaviour
             _rematchButton.onClick.AddListener(OnRematchPressed);
         if (_exitAfterMatchButton != null)
             _exitAfterMatchButton.onClick.AddListener(OnExitAfterMatchPressed);
+
+        if (_skinOptions != null)
+        {
+            for (int i = 0; i < _skinOptions.Length; i++)
+            {
+                int index = i;
+                _skinOptions[i].button.onClick.AddListener(() => OnSkinSelected(index));
+            }
+        }
     }
 
     private void OnDestroy()
@@ -227,6 +245,28 @@ public class LobbyUI : MonoBehaviour
         OnBackToMenuPressed();
     }
 
+    private void OnSkinSelected(int skinIndex)
+    {
+        if (PlayerNetwork.LocalInstance != null)
+            PlayerNetwork.LocalInstance.SetSkinServerRpc(skinIndex);
+        else
+            PlayerNetwork.PendingSkinIndex = skinIndex;
+
+        UpdateSkinSelectionUI(skinIndex);
+    }
+
+    private void UpdateSkinSelectionUI(int selectedIndex)
+    {
+        if (_skinOptions == null) return;
+        for (int i = 0; i < _skinOptions.Length; i++)
+        {
+            Color targetColor = (i == selectedIndex) ? Color.gray : Color.white;
+            Image img = _skinOptions[i].button.GetComponent<Image>();
+            if (img != null)
+                img.color = targetColor;
+        }
+    }
+
     private void ShowWaitingForPlayers()
     {
         if (_lobbyPanel != null) _lobbyPanel.SetActive(true);
@@ -264,7 +304,6 @@ public class LobbyUI : MonoBehaviour
             _lobbyReadyText.text = $"Ready: 0/{connected}";
         }
 
-        // Сбрасываем состояние готовности при входе в ReadyCheck
         _isReady = false;
         UpdateReadyButtonState();
     }
@@ -291,8 +330,6 @@ public class LobbyUI : MonoBehaviour
         if (_countdownPanel != null) _countdownPanel.SetActive(false);
         if (_gameplayHUD != null) _gameplayHUD.SetActive(false);
         if (_resultsPanel != null) _resultsPanel.SetActive(true);
-
-        // Текст уже установлен через ShowResultsObserversRpc
     }
 
     private void ShowMenu()
